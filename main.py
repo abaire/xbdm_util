@@ -2,19 +2,12 @@
 """See https://xboxdevwiki.net/Xbox_Debug_Monitor"""
 
 import argparse
-import collections
-import select
-import socket
-import struct
 import sys
-import threading
 import time
 
 from gdbxbdmbridge import bridge
 from gdbxbdmbridge import discoverer
 
-# xemu NAT can't bind to protected ports.
-XBDM_PORT_NAT = 1731
 XBDM_PORT = 731
 
 
