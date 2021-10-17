@@ -4,10 +4,13 @@
 class RDCPCommand:
     """Models a Remote Debugging and Control Protocol command."""
 
+    STATUS_OK = 200
+    STATUS_CONNECTED = 201
+
     STATUS_CODES = {
         0: "INVALID",
-        200: "OK",
-        201: "connected",
+        STATUS_OK: "OK",
+        STATUS_CONNECTED: "connected",
         202: "multiline response follows",
         203: "binary response follows",
         204: "send binary data",

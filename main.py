@@ -14,8 +14,12 @@ XBDM_PORT = 731
 class BridgeManager:
     def __init__(self):
         self._bridges = set()
+        self._bridge_ips = set()
 
     def start_bridge(self, listen_ip, xbox_name, xbox_addr):
+        if xbox_addr in self._bridge_ips:
+            return
+        print(f"Adding bridge to {xbox_name}@{xbox_addr}")
         self._bridges.add(bridge.GDBXBDMBridge(listen_ip, xbox_name, xbox_addr))
 
     def shutdown(self):

@@ -10,3 +10,4 @@
 .vscode/
 .idea/
 bin/
+__pycache__/

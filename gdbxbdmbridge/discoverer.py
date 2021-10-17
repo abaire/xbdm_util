@@ -29,8 +29,9 @@ class NAPPacket:
         return ret
 
     def deserialize(self, buffer):
-        self.type, self.name = struct.unpack("Bp", buffer)
-        return 2 + len(self.name)
+        self.type, name_len = struct.unpack("BB", buffer[:2])
+        self.name = str(buffer[2:2 + name_len])
+        return 2 + name_len
 
 
 class XBOXDiscoverer:
@@ -45,10 +46,10 @@ class XBOXDiscoverer:
         self,
         on_registered: Callable[[str, (str, int)], None],
         listen_ip="",
-        listen_port=XBDM_PORT,
+        xbdm_port=XBDM_PORT,
     ):
         self.listen_ip = listen_ip
-        self.listen_port = listen_port
+        self.xbdm_port = xbdm_port
         self.broadcast_interval = self.DISCOVERY_BROADCAST_INTERVAL_SECONDS
         self.on_registered = on_registered
         self._xbox_registry_lock = threading.RLock()
@@ -68,8 +69,12 @@ class XBOXDiscoverer:
         self._discovery_thread.start()
 
     def register(self, name, addr):
-        print("REGISTER")
         with self._xbox_registry_lock:
+            if addr in self._xbox_ip_registry:
+                if name != self._xbox_ip_registry[addr]:
+                    print("TODO: Handle XBOX device renaming gracefully")
+                return
+
             self._xbox_name_registry[name].add(addr)
             self._xbox_ip_registry[addr] = name
 
@@ -85,16 +90,13 @@ class XBOXDiscoverer:
     def _thread_main(self):
         broadcast_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         broadcast_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-
-        recv_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        recv_sock.bind((self.listen_ip, self.listen_port))
-
+        broadcast_sock.bind((self.listen_ip, 0))
         discovery_packet = NAPPacket.build_discovery_packet()
 
         last_broadcast = time.time() - self.broadcast_interval
         while self._running:
-            readable = [recv_sock]
-            exceptional = [recv_sock]
+            readable = [broadcast_sock]
+            exceptional = readable[:]
 
             elapsed_time = time.time() - last_broadcast
             if elapsed_time >= self.broadcast_interval:
@@ -107,16 +109,18 @@ class XBOXDiscoverer:
                 readable, writable, exceptional, self.broadcast_interval
             )
 
-            if recv_sock in readable:
-                data, addr = recv_sock.recvfrom(277)
+            if broadcast_sock in readable:
+                data, addr = broadcast_sock.recvfrom(277)
                 self._parse_response(data, addr)
 
             if broadcast_sock in writable:
                 bytes_sent = broadcast_sock.sendto(
-                    discovery_packet.serialize(), ("<broadcast>", self.listen_port)
+                    discovery_packet.serialize(), ("<broadcast>", self.xbdm_port)
                 )
                 if bytes_sent != 2:
                     print("ERROR: Failed to send discovery packet.")
+
+        broadcast_sock.close()
 
     def _parse_response(self, data: bytes, addr: (str, int)) -> None:
         reply_packet = NAPPacket()
