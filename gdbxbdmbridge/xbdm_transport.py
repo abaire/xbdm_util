@@ -1,5 +1,5 @@
+import collections
 import logging
-import time
 
 from . import ip_transport
 from . import rdcp_command
@@ -17,7 +17,7 @@ class XBDMTransport(ip_transport.IPTransport):
         super().__init__(self._process_xbdm_data, name)
 
         self._state = self.STATE_INIT
-        self._command_queue = []
+        self._command_queue = collections.deque()
 
     @property
     def state(self) -> int:
@@ -51,8 +51,10 @@ class XBDMTransport(ip_transport.IPTransport):
 
         bytes_procesed = response.parse(transport.read_buffer)
         while bytes_procesed > 0:
-            if not self._process_rdcp_command(response):
-                logger.debug(f"Close requested when processing response {response}")
+            if self._process_rdcp_command(response):
+                logger.warning(
+                    f"!!! Close requested when processing response {response}"
+                )
                 break
             transport.shift_read_buffer(bytes_procesed)
             bytes_procesed = response.parse(transport.read_buffer)
@@ -60,6 +62,7 @@ class XBDMTransport(ip_transport.IPTransport):
         logger.debug(f"After processing: {transport.read_buffer}")
 
     def _process_rdcp_command(self, response: rdcp_response.RDCPResponse) -> bool:
+        """Processes a single RDCPResponse. Return True to close the connection"""
         logger.debug(f"Processing RDCP command {response}")
         if self._state == self.STATE_INIT:
             return self._process_connect_response(response)
@@ -72,12 +75,12 @@ class XBDMTransport(ip_transport.IPTransport):
             response.status != response.STATUS_OK
             and response.status != response.STATUS_CONNECTED
         ):
-            return False
+            return True
         self._state = self.STATE_CONNECTED
-        return True
+        return False
 
     def _process_command_response(self, response: rdcp_response.RDCPResponse) -> bool:
-        cmd: rdcp_command.RDCPCommand = self._command_queue.pop()
+        cmd: rdcp_command.RDCPCommand = self._command_queue.popleft()
         ret = cmd.process_response(response)
 
         # TODO: Handle requests to drop connection.

@@ -51,6 +51,12 @@ class XBDMDialog(wx.Dialog):
 
         self._box.Layout()
 
+        cmd = rdcp_command.AltAddr(handler=lambda r: print(r))
+        self._bridge.send_rdcp_command(cmd)
+
+        # cmd = rdcp_command.DriveList(handler=self._on_drive_list)
+        # self._bridge.send_rdcp_command(cmd)
+
     def _on_send(self, evt):
         index = self._input.GetSelection()
         if index < 0:
@@ -65,7 +71,7 @@ class XBDMDialog(wx.Dialog):
 
     def _on_command_response(self, response: rdcp_response.RDCPResponse):
         logging.info(response)
-        return True
+        return False
 
     def _on_drive_list(self, response: rdcp_command.DriveList.Response):
         logging.info(response)
@@ -75,11 +81,10 @@ class XBDMDialog(wx.Dialog):
             lambda r: self._on_drive_free_space(response.drives[0], r),
         )
         self._bridge.send_rdcp_command(cmd)
-
-        return True
+        return False
 
     def _on_drive_free_space(
         self, drive_letter, response: rdcp_command.DriveFreeSpace.Response
     ):
         logging.info(f"Free space on {drive_letter}: {response}")
-        return True
+        return False
