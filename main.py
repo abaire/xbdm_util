@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
-"""See https://xboxdevwiki.net/Xbox_Debug_Monitor"""
+"""See https://xboxdevwiki.net/Xbox_Debug_Monitor and https://sourceware.org/gdb/onlinedocs/gdb/Remote-Protocol.html"""
 
 import argparse
 import sys
-
-import wx
+import time
 
 from gdbxbdmbridge import bridge_manager
 from gdbxbdmbridge import discoverer
-from gdbxbdmbridge import gui
 
 XBDM_PORT = 731
 
@@ -21,16 +19,15 @@ def main(args):
         args.discovery_listen_ip, args.discovery_port
     )
 
-    app = wx.App()
-    frame = gui.MainFrame(title="GDB <-> XBDM Bridge")
-    frame.set_discovered_devices(xbox_discoverer.get_registered_devices())
-    frame.Show()
+    # TODO: Support console-only mode
+    from gdbxbdmbridge import gui
 
-    frame.Bind(gui.MainFrame.EVT_LAUNCH_XBDM_BROWSER, launch_xbdm_browser)
+    app = gui.Application(xbox_discoverer, manager)
 
     def add_bridge(name: str, addr: (str, int)) -> None:
         manager.start_bridge(args.discovery_listen_ip, name, addr)
-        frame.set_discovered_devices(manager.get_bridge_infos())
+        if app:
+            app.refresh_discovered_devices()
 
     xbox_discoverer.set_on_discover_callback(add_bridge)
 
@@ -41,21 +38,19 @@ def main(args):
 
     try:
         xbox_discoverer.start()
-        app.MainLoop()
-        xbox_discoverer.shutdown()
-        manager.shutdown()
-
+        if app:
+            app.MainLoop()
+        else:
+            while True:
+                time.sleep(1000)
     except KeyboardInterrupt:
         xbox_discoverer.shutdown()
         manager.shutdown()
         return 0
 
+    xbox_discoverer.shutdown()
+    manager.shutdown()
     return 0
-
-
-def launch_xbdm_browser(evt: gui.MainFrame.LaunchXBDMBrowserEvent):
-    xbox_addr = evt.addr
-    print(xbox_addr)
 
 
 def xbox_addr(value):

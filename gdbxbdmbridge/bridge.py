@@ -24,9 +24,7 @@ class GDBXBDMBridge:
         self._listen_sock.bind((self.listen_ip, 0))
         self._listen_sock.listen(1)
         self.listen_addr = self._listen_sock.getsockname()
-        print(
-            f"Bridging connections to {self.xbox_info} at port {self.listen_addr[1]}"
-        )
+        print(f"Bridging connections to {self.xbox_info} at port {self.listen_addr[1]}")
 
         self._gdb = ip_transport.IPTransport(
             lambda transport: self._process_gdb_data(transport), "GDB"
