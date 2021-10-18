@@ -12,7 +12,21 @@ class XBDMDialog(wx.Dialog):
 
         self._bridge = xbox_bridge
 
-        self._bridge.connect_xbdm()
+        if not self._bridge.can_process_xbdm_commands:
+            self._wait_text = wx.StaticText(
+                self, label=f"Connecting to {xbox_bridge.xbox_info}"
+            )
+            self._bridge.connect_xbdm_async(lambda success: self._on_connected(success))
+            return
+        self._wait_text = None
+
+    def _on_connected(self, success: bool):
+        if not success:
+            self._wait_text.SetLabel(f"Failed to connect to {self._bridge.xbox_info}")
+            return
+
+        self._wait_text.Destroy()
+        self._wait_text = None
 
         cmd = rdcp_command.RDCPCommand("systime")
         self._bridge.send_rdcp_command(cmd)

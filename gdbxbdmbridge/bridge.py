@@ -1,10 +1,10 @@
 """Provides bridging between GDB and XBDM."""
 import logging
-import time
-
 import select
 import socket
+import time
 import threading
+from typing import Callable
 
 from . import ip_transport
 from . import rdcp_command
@@ -49,8 +49,12 @@ class GDBXBDMBridge:
         self._close()
 
     @property
-    def xbox_info(self):
+    def xbox_info(self) -> str:
         return f"{self.xbox_name}@{self.xbox_addr[0]}:{self.xbox_addr[1]}"
+
+    @property
+    def can_process_xbdm_commands(self) -> bool:
+        return self._xbdm.can_process_commands
 
     def _close(self):
         self._running = False
@@ -68,16 +72,23 @@ class GDBXBDMBridge:
 
         if self._xbdm.connected:
             # TODO: Wait on a condition variable until the connection response is received.
-            time.sleep(4)
+            time.sleep(1)
             return self._xbdm.can_process_commands
 
         ret = self._connect_to_xbdm()
         if ret:
             # TODO: Wait on a condition variable until the connection response is received.
-            time.sleep(4)
+            time.sleep(1)
             pass
 
         return self._xbdm.can_process_commands
+
+    def connect_xbdm_async(self, callback: Callable[[bool], None]) -> None:
+        threading.Thread(
+            target=lambda bridge: callback(bridge.connect_xbdm()),
+            name=f"connect_xbdm_async {self.xbox_info}",
+            args=(self,),
+        ).start()
 
     def _thread_main(self):
         while self._running:
