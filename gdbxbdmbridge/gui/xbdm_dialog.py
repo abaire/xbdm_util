@@ -19,7 +19,9 @@ class XBDMDialog(wx.Dialog):
             )
             self._bridge.connect_xbdm_async(lambda success: self._on_connected(success))
             return
+
         self._wait_text = None
+        self._on_connected(True)
 
     def _on_connected(self, success: bool):
         if not success:
@@ -30,7 +32,7 @@ class XBDMDialog(wx.Dialog):
         self._wait_text = None
 
         cmd = rdcp_command.RDCPCommand(
-            "systime", response_handler=lambda response: self._on_systime(response)
+            "threads", response_handler=lambda response: self._on_systime(response)
         )
         self._bridge.send_rdcp_command(cmd)
 

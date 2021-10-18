@@ -20,6 +20,7 @@ class Application(wx.App):
         self._manager = manager
 
         self.frame = main_frame.MainFrame(title="GDB <-> XBDM Bridge")
+        self.frame.CenterOnScreen()
         self.frame.Show()
 
         self.frame.Bind(

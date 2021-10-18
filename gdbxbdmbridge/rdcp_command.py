@@ -96,7 +96,7 @@ class RDCPCommand:
         "stopon",
         "suspend",
         "sysfileupd",
-        "systime",
+        "systime",  # high=0x1d7c3df low=0xb7852a80
         "threadinfo",
         "threads",
         "title",

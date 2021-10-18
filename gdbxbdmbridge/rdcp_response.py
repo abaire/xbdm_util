@@ -8,17 +8,20 @@ class RDCPResponse:
     """Models a Remote Debugging and Control Protocol response."""
 
     TERMINATOR = b"\r\n"
+    MULTILINE_TERMINATOR = b"\r\n.\r\n"
     STR_BODY_CUTOFF = 64
 
     STATUS_OK = 200
     STATUS_CONNECTED = 201
+    STATUS_MULTILINE_RESPONSE = 202
+    STATUS_BINARY_RESPONSE = 203
 
     STATUS_CODES = {
         0: "INVALID",
         STATUS_OK: "OK",
         STATUS_CONNECTED: "connected",
-        202: "multiline response follows",
-        203: "binary response follows",
+        STATUS_MULTILINE_RESPONSE: "multiline response follows",
+        STATUS_BINARY_RESPONSE: "binary response follows",
         204: "send binary data",
         205: "connection dedicated",
         400: "unexpected error",
@@ -47,13 +50,17 @@ class RDCPResponse:
 
     def __init__(self):
         self.status = 0
+        self.message = bytes()
         self.data = []
 
     def __str__(self):
         size = len(self.data)
-        ret = (
-            f"{self.status}:{self.STATUS_CODES.get(self.status, '??INVALID??')}[{size}]"
-        )
+        if self.message:
+            message = self.message.decode("utf-8")
+        else:
+            message = self.STATUS_CODES.get(self.status, "??INVALID??")
+
+        ret = f"RDCPResponse::{self.status}:{message} [{size}]"
         if size:
             ret += " "
             for i in range(0, min(size, self.STR_BODY_CUTOFF - 3)):
@@ -66,6 +73,7 @@ class RDCPResponse:
 
     def parse(self, buffer: bytes):
         terminator = buffer.find(self.TERMINATOR)
+        terminator_len = len(self.TERMINATOR)
         if terminator < 0:
             return 0
 
@@ -75,6 +83,18 @@ class RDCPResponse:
 
         status = buffer[:3]
         self.status = int(status)
-        self.data = buffer[4:terminator]
 
-        return terminator + len(self.TERMINATOR)
+        if self.status == self.STATUS_MULTILINE_RESPONSE:
+            body_start = terminator + terminator_len
+            terminator = buffer.find(self.MULTILINE_TERMINATOR)
+            if terminator < 0:
+                return 0
+
+            self.data = buffer[body_start:terminator]
+            self.message = buffer[4 : body_start - terminator_len]
+            terminator_len = len(self.MULTILINE_TERMINATOR)
+        elif self.status == self.STATUS_BINARY_RESPONSE:
+            logger.error("TODO: IMPLEMENT BINARY RESPONSE PARSING")
+
+        self.data = buffer[4:terminator]
+        return terminator + terminator_len
