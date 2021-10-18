@@ -12,5 +12,7 @@ class XBDMDialog(wx.Dialog):
 
         self._bridge = xbox_bridge
 
+        self._bridge.connect_xbdm()
+
         cmd = rdcp_command.RDCPCommand("systime")
         self._bridge.send_rdcp_command(cmd)

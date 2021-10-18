@@ -128,7 +128,7 @@ class RDCPCommand:
         if not self.command:
             return bytes()
 
-        ret = bytearray(self.command)
+        ret = bytearray(self.command, "utf-8")
 
         if self.body:
             ret += self.body
