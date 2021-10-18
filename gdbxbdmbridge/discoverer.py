@@ -1,11 +1,14 @@
 """Provides discovery of XBDM-enabled XBOXes."""
 import collections
+import logging
 import select
 import socket
 import struct
 import threading
 import time
 from typing import Callable
+
+logger = logging.getLogger(__name__)
 
 
 class NAPPacket:
@@ -79,7 +82,7 @@ class XBOXDiscoverer:
         with self._xbox_registry_lock:
             if addr in self._xbox_ip_registry:
                 if name != self._xbox_ip_registry[addr]:
-                    print("TODO: Handle XBOX device renaming gracefully")
+                    logger.warning("TODO: Handle XBOX device renaming gracefully")
                 return
 
             self._xbox_name_registry[name].add(addr)
@@ -89,10 +92,10 @@ class XBOXDiscoverer:
             self.on_discover(name, addr)
 
     def shutdown(self):
-        print("Shutting down discovery process.")
+        logger.info("Shutting down discovery process.")
         self._running = False
         self._discovery_thread.join()
-        print("Exited discovery process.")
+        logger.info("Exited discovery process.")
 
     def _thread_main(self):
         broadcast_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -125,7 +128,7 @@ class XBOXDiscoverer:
                     discovery_packet.serialize(), ("<broadcast>", self.xbdm_port)
                 )
                 if bytes_sent != 2:
-                    print("ERROR: Failed to send discovery packet.")
+                    logger.error("Failed to send discovery packet.")
 
         broadcast_sock.close()
 
@@ -133,12 +136,12 @@ class XBOXDiscoverer:
         reply_packet = NAPPacket()
 
         if len(data) < 2:
-            print("Ignoring unexpected data")
+            logger.debug("Ignoring unexpected data")
             return
 
         bytes_consumed = reply_packet.deserialize(data)
         if len(data) != bytes_consumed:
-            print(
+            logger.warning(
                 f"Received unexpected non-NAP packet with type: {reply_packet.TYPE_REPLY} from {addr}"
             )
             return

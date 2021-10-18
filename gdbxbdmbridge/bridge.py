@@ -1,12 +1,15 @@
 """Provides bridging between GDB and XBDM."""
+import logging
 import select
 import socket
 import threading
 
 from . import ip_transport
 from . import rdcp_command
+from . import rdcp_response
 
 SELECT_TIMEOUT_SECS = 0.25
+logger = logging.getLogger(__name__)
 
 
 class GDBXBDMBridge:
@@ -24,7 +27,9 @@ class GDBXBDMBridge:
         self._listen_sock.bind((self.listen_ip, 0))
         self._listen_sock.listen(1)
         self.listen_addr = self._listen_sock.getsockname()
-        print(f"Bridging connections to {self.xbox_info} at port {self.listen_addr[1]}")
+        logger.info(
+            f"Bridging connections to {self.xbox_info} at port {self.listen_addr[1]}"
+        )
 
         self._gdb = ip_transport.IPTransport(
             lambda transport: self._process_gdb_data(transport), "GDB"
@@ -92,13 +97,13 @@ class GDBXBDMBridge:
         remote, remote_addr = self._listen_sock.accept()
 
         if self._gdb.connected:
-            print(
+            logger.warning(
                 f"Denying GDB connection from {remote_addr} as socket is already connected."
             )
             remote.close()
             return True
 
-        print(f"Accepted GDB connection from {remote_addr}")
+        logger.info(f"Accepted GDB connection from {remote_addr}")
         remote.setblocking(False)
 
         self._gdb.set_connection(remote, remote_addr)
@@ -109,19 +114,19 @@ class GDBXBDMBridge:
         return True
 
     def _close_listen_socket(self):
-        print(f"Closing GDB bridge to {self.xbox_info} at {self.listen_addr[1]}")
+        logger.info(f"Closing GDB bridge to {self.xbox_info} at {self.listen_addr[1]}")
         self._listen_sock.close()
 
     def _connect_to_xbdm(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        print(f"Connecting to XBDM {self.xbox_addr}")
+        logger.info(f"Connecting to XBDM {self.xbox_addr}")
         try:
             sock.connect(self.xbox_addr)
         except ConnectionRefusedError:
-            print(f"Failed to connect to XBDM {self.xbox_info}")
+            logger.error(f"Failed to connect to XBDM {self.xbox_info}")
             return False
 
-        print(f"Connected to XBDM {self.xbox_info}")
+        logger.info(f"Connected to XBDM {self.xbox_info}")
         sock.setblocking(False)
         self._xbdm.set_connection(sock, self.xbox_addr)
         return True
@@ -130,7 +135,7 @@ class GDBXBDMBridge:
         pass
 
     def _process_xbdm_data(self, transport: ip_transport.IPTransport):
-        cmd = rdcp_command.RDCPCommand()
+        cmd = rdcp_response.RDCPResponse()
 
         bytes_procesed = cmd.parse(transport.read_buffer)
         while bytes_procesed > 0:
@@ -139,14 +144,24 @@ class GDBXBDMBridge:
             transport.shift_read_buffer(bytes_procesed)
             bytes_procesed = cmd.parse(transport.read_buffer)
 
-        print(f"After processing: {transport.read_buffer}")
+        logger.debug(f"After processing: {transport.read_buffer}")
 
-    def _process_rdcp_command(self, cmd: rdcp_command.RDCPCommand) -> bool:
-        print(f"Processing RDCP command {cmd}")
+    def _process_rdcp_command(self, cmd: rdcp_response.RDCPResponse) -> bool:
+        logger.debug(f"Processing RDCP command {cmd}")
         if self._xbdm_state == self.STATE_INIT:
             if cmd.status != cmd.STATUS_OK and cmd.status != cmd.STATUS_CONNECTED:
                 return False
             self._xbdm_state = self.STATE_CONNECTED
             return True
+
+        return True
+
+    def send_rdcp_command(self, cmd: rdcp_command.RDCPCommand) -> bool:
+        logger.debug(f"Sending RDCP command {cmd}")
+        if self._xbdm_state != self.STATE_CONNECTED:
+            logger.error("Not connected")
+            return False
+
+        self._xbdm.send(cmd.serialize())
 
         return True

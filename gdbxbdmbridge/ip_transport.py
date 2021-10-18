@@ -1,5 +1,8 @@
+import logging
 import socket
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 class IPTransport:
@@ -41,9 +44,9 @@ class IPTransport:
         if not self._sock:
             return
         if self.name:
-            print(f"Closing connection {self.name} to {self.addr}")
+            logger.info(f"Closing connection {self.name} to {self.addr}")
         else:
-            print(f"Closing connection to {self.addr}")
+            logger.info(f"Closing connection to {self.addr}")
         self._sock.close()
         self._sock = None
         self.addr = None
@@ -62,18 +65,22 @@ class IPTransport:
 
         if self._sock in exceptional:
             if self.name:
-                print(f"Socket exception in IPTransport {self.name} to {self.addr}")
+                logger.info(
+                    f"Socket exception in IPTransport {self.name} to {self.addr}"
+                )
             else:
-                print(f"Socket exception in IPTransport to {self.addr}")
+                logger.info(f"Socket exception in IPTransport to {self.addr}")
             return False
 
         if self._sock in readable:
             data = self._sock.recv(4096)
             if not data:
                 if self.name:
-                    print(f"Remote closed in IPTransport {self.name} to {self.addr}")
+                    logger.info(
+                        f"Remote closed in IPTransport {self.name} to {self.addr}"
+                    )
                 else:
-                    print(f"Remote closed in IPTransport to {self.addr}")
+                    logger.info(f"Remote closed in IPTransport to {self.addr}")
                 self.close()
                 return False
 

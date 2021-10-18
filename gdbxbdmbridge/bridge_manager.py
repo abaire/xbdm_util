@@ -1,7 +1,10 @@
+import logging
 from typing import Optional
 
 from . import bridge
 from . import bridge_info
+
+logger = logging.getLogger(__name__)
 
 
 class BridgeManager:
@@ -17,17 +20,17 @@ class BridgeManager:
         if old_bridge:
             return old_bridge.listen_addr
 
-        print(f"Adding bridge to {xbox_name}@{xbox_addr}")
+        logger.info(f"Adding bridge to {xbox_name}@{xbox_addr}")
         new_bridge = bridge.GDBXBDMBridge(listen_ip, xbox_name, xbox_addr)
         self._bridges[xbox_addr] = new_bridge
         return new_bridge.listen_addr
 
     def shutdown(self):
-        print("Shutting down bridges.")
+        logger.info("Shutting down bridges.")
         for bridge in self._bridges.values():
             bridge.shutdown()
         self._bridges.clear()
-        print("Bridges shut down.")
+        logger.info("Bridges shut down.")
 
     def get_bridge_infos(self) -> [bridge_info.BridgeInfo]:
         ret = []

@@ -2,6 +2,7 @@
 """See https://xboxdevwiki.net/Xbox_Debug_Monitor and https://sourceware.org/gdb/onlinedocs/gdb/Remote-Protocol.html"""
 
 import argparse
+import logging
 import sys
 import time
 
@@ -9,10 +10,16 @@ from gdbxbdmbridge import bridge_manager
 from gdbxbdmbridge import discoverer
 
 XBDM_PORT = 731
+logger = logging.getLogger(__name__)
 
 
 def main(args):
-    print("Startup")
+    log_level = logging.DEBUG if args.verbose else logging.INFO
+    logging.basicConfig(
+        level=log_level, format="%(levelname)-8s [%(filename)s:%(lineno)d] %(message)s"
+    )
+
+    logger.debug("Startup")
 
     manager = bridge_manager.BridgeManager()
     xbox_discoverer = discoverer.XBOXDiscoverer(
@@ -94,6 +101,13 @@ if __name__ == "__main__":
         type=int,
         default=discoverer.XBOXDiscoverer.XBDM_PORT,
         help="Port on which XBDM listens for discovery of XBOX devkits.",
+    )
+
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        help="Enables verbose logging information.",
+        action="store_true",
     )
 
     args = parser.parse_args()
