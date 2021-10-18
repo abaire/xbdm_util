@@ -30,16 +30,12 @@ class GDBXBDMBridge:
             f"Bridging connections to {self.xbox_info} at port {self.listen_addr[1]}"
         )
 
-        self._gdb = ip_transport.IPTransport(
-            lambda transport: self._process_gdb_data(transport), "GDB"
-        )
+        self._gdb = ip_transport.IPTransport(self._process_gdb_data, "GDB")
         self._xbdm = xbdm_transport.XBDMTransport("XBDM")
 
         self._running = True
         self._thread = threading.Thread(
-            target=lambda bridge: bridge._thread_main(),
-            name=f"Bridge {self.xbox_info}",
-            args=(self,),
+            target=self._thread_main, name=f"Bridge {self.xbox_info}"
         )
         self._thread.start()
 
@@ -104,17 +100,18 @@ class GDBXBDMBridge:
             )
 
             if not self._gdb.process(readable, writable, exceptional):
-                self._close()
-                self.shutdown()
+                self._running = False
                 return
 
             if not self._xbdm.process(readable, writable, exceptional):
-                self._close()
-                self.shutdown()
-                return
+                self._running = False
+                break
 
             if self._listen_sock in readable and not self._accept_gdb_connection():
+                self._running = False
                 break
+
+        self._close()
 
     def _accept_gdb_connection(self):
         remote, remote_addr = self._listen_sock.accept()

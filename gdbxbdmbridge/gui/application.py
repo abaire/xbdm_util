@@ -25,7 +25,7 @@ class Application(wx.App):
 
         self.frame.Bind(
             main_frame.MainFrame.EVT_LAUNCH_XBDM_BROWSER,
-            lambda evt: self._launch_xbdm_browser(evt),
+            self._launch_xbdm_browser,
         )
 
         self.refresh_discovered_devices()

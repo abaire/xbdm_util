@@ -62,9 +62,7 @@ class XBOXDiscoverer:
         self._running = False
 
         self._discovery_thread = threading.Thread(
-            target=lambda x: x._thread_main(),
-            name="XBOXDiscoverer",
-            args=(self,),
+            target=self._thread_main, name="XBOXDiscoverer"
         )
 
     def start(self):

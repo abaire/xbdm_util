@@ -120,10 +120,10 @@ class RDCPCommand:
         self.body = body
         self._response_handler = response_handler
 
-        if self.command not in self.COMMANDS:
-            logger.error(f"Invalid command {command}")
-            self.command = None
-            return
+        # if self.command not in self.COMMANDS:
+        #     logger.error(f"Invalid command {command}")
+        #     self.command = None
+        #     return
 
     def __str__(self):
         ret = f"{self.__class__.__name__}({self.command})"
@@ -171,6 +171,33 @@ class _ProcessedCommand(RDCPCommand):
 
         super().__init__(command, response_handler=process_response, **kw)
         self._processed_response_handler = handler
+
+
+class Bye(_ProcessedCommand):
+    """Closes the connection gracefully."""
+
+    class Response:
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            self._status = response.status
+            self._message = response.message
+
+        @property
+        def ok(self):
+            return self._status == rdcp_response.RDCPResponse.STATUS_OK
+
+        def __str__(self):
+            if self._message:
+                message = self._message.decode("utf-8")
+            else:
+                message = rdcp_response.RDCPResponse.STATUS_CODES.get(
+                    self._status, "??INVALID??"
+                )
+
+            ret = f"Bye.Response::{self._status}:{message}"
+            return ret
+
+    def __init__(self, drive_letter, handler=None):
+        super().__init__("bye", response_class=self.Response, handler=handler)
 
 
 class DriveList(_ProcessedCommand):

@@ -14,7 +14,7 @@ class XBDMTransport(ip_transport.IPTransport):
     STATE_AWAITING_RESPONSE = 2
 
     def __init__(self, name=""):
-        super().__init__(lambda transport: self._process_xbdm_data(transport), name)
+        super().__init__(self._process_xbdm_data, name)
 
         self._state = self.STATE_INIT
         self._command_queue = []
