@@ -3,6 +3,7 @@ import wx
 from gdbxbdmbridge import bridge_manager
 from gdbxbdmbridge import discoverer
 from gdbxbdmbridge.gui import main_frame
+from gdbxbdmbridge.gui import xbdm_dialog
 
 
 class Application(wx.App):
@@ -11,7 +12,7 @@ class Application(wx.App):
         xbox_discoverer: discoverer.XBOXDiscoverer,
         manager: bridge_manager.BridgeManager,
         *args,
-        **kw
+        **kw,
     ):
         super().__init__(*args, **kw)
 
@@ -28,9 +29,31 @@ class Application(wx.App):
 
         self.refresh_discovered_devices()
 
+        self._dialogs = {}
+
     def refresh_discovered_devices(self):
         self.frame.set_discovered_devices(self._manager.get_bridge_infos())
 
     def _launch_xbdm_browser(self, evt: main_frame.MainFrame.LaunchXBDMBrowserEvent):
         xbox_addr = evt.addr
-        print(xbox_addr)
+        old_dialog = self._dialogs.get(xbox_addr)
+        if old_dialog:
+            # TODO: Raise the dialog
+            return
+
+        xbox_bridge = self._manager.get_bridge(xbox_addr)
+        if not xbox_bridge:
+            print(f"Failed to look up bridge for {xbox_addr}")
+            return
+        dialog = xbdm_dialog.XBDMDialog(self.frame, xbox_bridge)
+        dialog.CenterOnScreen()
+
+        self._dialogs[xbox_addr] = dialog
+
+        def destroy_dialog(_evt):
+            del self._dialogs[xbox_addr]
+            dialog.Destroy()
+
+        dialog.Bind(wx.EVT_CLOSE, destroy_dialog)
+
+        dialog.Show()

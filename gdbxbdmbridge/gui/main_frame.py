@@ -62,7 +62,11 @@ class _XBDMGrid(wx.grid.Grid):
 
     def OnCellLeftDClick(self, evt):
         row = evt.GetRow()
-        addr = self.GetCellValue(row, 1)
-        new_event = LaunchXBDMBrowserEvent(evt.GetEventObject().GetId(), addr=addr)
+        # Convert the address string back into the socket addr.
+        addr = self.GetCellValue(row, 1).split(":")
+        addr[1] = int(addr[1])
+        new_event = LaunchXBDMBrowserEvent(
+            evt.GetEventObject().GetId(), addr=tuple(addr)
+        )
         wx.PostEvent(self, new_event)
         evt.Skip()

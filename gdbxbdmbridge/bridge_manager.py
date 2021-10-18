@@ -1,3 +1,5 @@
+from typing import Optional
+
 from . import bridge
 from . import bridge_info
 
@@ -36,3 +38,6 @@ class BridgeManager:
                 )
             )
         return ret
+
+    def get_bridge(self, xbox_addr: (str, int)) -> Optional[bridge.GDBXBDMBridge]:
+        return self._bridges.get(xbox_addr)
