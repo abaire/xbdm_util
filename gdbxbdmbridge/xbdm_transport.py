@@ -28,7 +28,7 @@ class XBDMTransport(ip_transport.IPTransport):
         return self._state >= self.STATE_CONNECTED
 
     def send_command(self, cmd: rdcp_command.RDCPCommand) -> bool:
-        logger.debug(f"Sending RDCP command {cmd}")
+        logger.debug(f"Queueing RDCP command {cmd}")
         if self._state < self.STATE_CONNECTED:
             logger.error("Not connected")
             return False
@@ -41,7 +41,9 @@ class XBDMTransport(ip_transport.IPTransport):
     def _send_next_command(self):
         if self._state != self.STATE_CONNECTED or not self._command_queue:
             return
-        self.send(self._command_queue[0].serialize())
+        bytes = self._command_queue[0].serialize()
+        logger.debug(f"Sending RDCP {bytes}")
+        self.send(bytes)
         self._state = self.STATE_AWAITING_RESPONSE
 
     def _process_xbdm_data(self, transport: ip_transport.IPTransport):

@@ -1,8 +1,11 @@
+import logging
 import wx
 
 from gdbxbdmbridge import bridge
 from gdbxbdmbridge import rdcp_command
 from gdbxbdmbridge import rdcp_response
+
+logger = logging.getLogger(__name__)
 
 
 class XBDMDialog(wx.Dialog):
@@ -31,11 +34,31 @@ class XBDMDialog(wx.Dialog):
         self._wait_text.Destroy()
         self._wait_text = None
 
+        cmd = rdcp_command.DriveList(lambda response: self._on_drive_list(response))
+        self._bridge.send_rdcp_command(cmd)
+
         cmd = rdcp_command.RDCPCommand(
-            "threads", response_handler=lambda response: self._on_systime(response)
+            "systime", response_handler=lambda response: self._on_systime(response)
         )
         self._bridge.send_rdcp_command(cmd)
 
     def _on_systime(self, response: rdcp_response.RDCPResponse):
-        print(response)
+        logging.info(response)
+        return True
+
+    def _on_drive_list(self, response: rdcp_command.DriveList.Response):
+        logging.info(response)
+
+        cmd = rdcp_command.DriveFreeSpace(
+            response.drives[0],
+            lambda r: self._on_drive_free_space(response.drives[0], r),
+        )
+        self._bridge.send_rdcp_command(cmd)
+
+        return True
+
+    def _on_drive_free_space(
+        self, drive_letter, response: rdcp_command.DriveFreeSpace.Response
+    ):
+        logging.info(f"Free space on {drive_letter}: {response}")
         return True

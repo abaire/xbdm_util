@@ -4,6 +4,19 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def get_utf_property(property_map: {bytes: bytes}, key: bytes, default=None) -> str:
+    """Returns the value of the given key as a UTF-8 string."""
+    val = property_map.get(key, default)
+    if not val:
+        return ""
+    return val.decode("utf-8")
+
+
+def get_int_property(property_map: {bytes: bytes}, key: bytes, default=0) -> int:
+    """Returns the value of the given key as an integer."""
+    return int(get_utf_property(property_map, key, bytes(f"{default}", "utf-8")), 16)
+
+
 class RDCPResponse:
     """Models a Remote Debugging and Control Protocol response."""
 
@@ -51,7 +64,7 @@ class RDCPResponse:
     def __init__(self):
         self.status = 0
         self.message = bytes()
-        self.data = []
+        self.data = bytes
 
     def __str__(self):
         size = len(self.data)
@@ -60,7 +73,7 @@ class RDCPResponse:
         else:
             message = self.STATUS_CODES.get(self.status, "??INVALID??")
 
-        ret = f"RDCPResponse::{self.status}:{message} [{size}]"
+        ret = f"{self.__class__.__name__}::{self.status}:{message} [{size}]"
         if size:
             ret += " "
             for i in range(0, min(size, self.STR_BODY_CUTOFF - 3)):
@@ -69,6 +82,21 @@ class RDCPResponse:
             if size > self.STR_BODY_CUTOFF - 3:
                 ret += "..."
 
+        return ret
+
+    def debug_log(self):
+        logger.debug(f"{self.__class__.__name__}::{self.status}\n{self.data}\n\n")
+
+    def parse_data_map(self) -> {str, str}:
+        """Processes self.data as a space-delimited list of key=value pairs."""
+        if not self.data:
+            return {}
+
+        ret = {}
+        items = self.data.split(b" ")
+        for item in items:
+            key, value = item.split(b"=")
+            ret[bytes(key)] = bytes(value)
         return ret
 
     def parse(self, buffer: bytes):
@@ -91,10 +119,11 @@ class RDCPResponse:
                 return 0
 
             self.data = buffer[body_start:terminator]
-            self.message = buffer[4 : body_start - terminator_len]
+            self.message = buffer[5 : body_start - terminator_len]
             terminator_len = len(self.MULTILINE_TERMINATOR)
         elif self.status == self.STATUS_BINARY_RESPONSE:
             logger.error("TODO: IMPLEMENT BINARY RESPONSE PARSING")
+        else:
+            self.data = buffer[5:terminator]
 
-        self.data = buffer[4:terminator]
         return terminator + terminator_len

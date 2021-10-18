@@ -11,6 +11,7 @@ class RDCPCommand:
     """Models a Remote Debugging and Control Protocol command."""
 
     TERMINATOR = b"\r\n"
+    STR_BODY_CUTOFF = 16
 
     COMMANDS = {
         "adminpw",
@@ -124,6 +125,21 @@ class RDCPCommand:
             self.command = None
             return
 
+    def __str__(self):
+        ret = f"{self.__class__.__name__}({self.command})"
+
+        size = 0 if not self.body else len(self.body)
+        if size:
+            ret += " '"
+            for i in range(0, min(size, self.STR_BODY_CUTOFF - 3)):
+                ret += chr(self.body[i])
+
+            if size > self.STR_BODY_CUTOFF - 3:
+                ret += "..."
+            ret += "'"
+
+        return ret
+
     def serialize(self) -> bytes:
         if not self.command:
             return bytes()
@@ -141,3 +157,106 @@ class RDCPCommand:
         if not self._response_handler:
             return True
         return self._response_handler(response)
+
+
+class _ProcessedCommand(RDCPCommand):
+    """Processes the response to the command in some command-specific way."""
+
+    def __init__(self, command, response_class, handler=None, **kw):
+        def process_response(response: rdcp_response.RDCPResponse) -> bool:
+            unpacked = response_class(response)
+            if not self._processed_response_handler:
+                return True
+            return self._processed_response_handler(unpacked)
+
+        super().__init__(command, response_handler=process_response, **kw)
+        self._processed_response_handler = handler
+
+
+class DriveList(_ProcessedCommand):
+    """Lists mounted drives on the XBOX."""
+
+    class Response:
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            self._status = response.status
+            self._message = response.message
+
+            if response.status != response.STATUS_OK:
+                self.drives = None
+            else:
+                self.drives = sorted([chr(x) for x in response.data])
+
+        @property
+        def ok(self):
+            return self._status == rdcp_response.RDCPResponse.STATUS_OK
+
+        def __str__(self):
+            if self._message:
+                message = self._message.decode("utf-8")
+            else:
+                message = rdcp_response.RDCPResponse.STATUS_CODES.get(
+                    self._status, "??INVALID??"
+                )
+
+            ret = f"DriveList.Response::{self._status}:{message} {self.drives}"
+            return ret
+
+    def __init__(self, handler=None):
+        super().__init__("drivelist", response_class=self.Response, handler=handler)
+
+
+class DriveFreeSpace(_ProcessedCommand):
+    """Returns the amount of free space on a drive."""
+
+    class Response:
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            self._status = response.status
+            self._message = response.message
+
+            self.free_to_caller = 0
+            self.total_bytes = 0
+            self.total_free_bytes = 0
+
+            if response.status != response.STATUS_MULTILINE_RESPONSE:
+                return
+
+            entries = response.parse_data_map()
+            self.free_to_caller = rdcp_response.get_int_property(
+                entries, b"freetocallerlo"
+            )
+            self.free_to_caller += (
+                rdcp_response.get_int_property(entries, b"freetocallerhi") << 32
+            )
+
+            self.total_bytes = rdcp_response.get_int_property(entries, b"totalbyteslo")
+            self.total_bytes += (
+                rdcp_response.get_int_property(entries, b"totalbyteshi") << 32
+            )
+
+            self.total_free_bytes = rdcp_response.get_int_property(
+                entries, b"totalfreebyteslo"
+            )
+            self.total_free_bytes += (
+                rdcp_response.get_int_property(entries, b"totalfreebyteshi") << 32
+            )
+
+        @property
+        def ok(self):
+            return self._status == rdcp_response.RDCPResponse.STATUS_OK
+
+        def __str__(self):
+            if self._message:
+                message = self._message.decode("utf-8")
+            else:
+                message = rdcp_response.RDCPResponse.STATUS_CODES.get(
+                    self._status, "??INVALID??"
+                )
+
+            ret = f"DriveFreeSpace.Response::{self._status}:{message} total: {self.total_bytes} total free: {self.total_free_bytes} free to caller: {self.free_to_caller}"
+            return ret
+
+    def __init__(self, drive_letter, handler=None):
+        super().__init__(
+            "drivefreespace", response_class=self.Response, handler=handler
+        )
+        self.body = bytes(f' name="{drive_letter}:\\"', "utf-8")
