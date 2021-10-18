@@ -2,6 +2,7 @@ import wx
 
 from gdbxbdmbridge import bridge
 from gdbxbdmbridge import rdcp_command
+from gdbxbdmbridge import rdcp_response
 
 
 class XBDMDialog(wx.Dialog):
@@ -28,5 +29,11 @@ class XBDMDialog(wx.Dialog):
         self._wait_text.Destroy()
         self._wait_text = None
 
-        cmd = rdcp_command.RDCPCommand("systime")
+        cmd = rdcp_command.RDCPCommand(
+            "systime", response_handler=lambda response: self._on_systime(response)
+        )
         self._bridge.send_rdcp_command(cmd)
+
+    def _on_systime(self, response: rdcp_response.RDCPResponse):
+        print(response)
+        return True

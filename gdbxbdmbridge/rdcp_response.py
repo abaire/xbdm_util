@@ -8,6 +8,7 @@ class RDCPResponse:
     """Models a Remote Debugging and Control Protocol response."""
 
     TERMINATOR = b"\r\n"
+    STR_BODY_CUTOFF = 64
 
     STATUS_OK = 200
     STATUS_CONNECTED = 201
@@ -50,9 +51,18 @@ class RDCPResponse:
 
     def __str__(self):
         size = len(self.data)
-        return (
+        ret = (
             f"{self.status}:{self.STATUS_CODES.get(self.status, '??INVALID??')}[{size}]"
         )
+        if size:
+            ret += " "
+            for i in range(0, min(size, self.STR_BODY_CUTOFF - 3)):
+                ret += chr(self.data[i])
+
+            if size > self.STR_BODY_CUTOFF - 3:
+                ret += "..."
+
+        return ret
 
     def parse(self, buffer: bytes):
         terminator = buffer.find(self.TERMINATOR)

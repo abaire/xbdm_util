@@ -45,14 +45,15 @@ class XBDMTransport(ip_transport.IPTransport):
         self._state = self.STATE_AWAITING_RESPONSE
 
     def _process_xbdm_data(self, transport: ip_transport.IPTransport):
-        cmd = rdcp_response.RDCPResponse()
+        response = rdcp_response.RDCPResponse()
 
-        bytes_procesed = cmd.parse(transport.read_buffer)
+        bytes_procesed = response.parse(transport.read_buffer)
         while bytes_procesed > 0:
-            if not self._process_rdcp_command(cmd):
+            if not self._process_rdcp_command(response):
+                logger.debug(f"Close requested when processing response {response}")
                 break
             transport.shift_read_buffer(bytes_procesed)
-            bytes_procesed = cmd.parse(transport.read_buffer)
+            bytes_procesed = response.parse(transport.read_buffer)
 
         logger.debug(f"After processing: {transport.read_buffer}")
 
