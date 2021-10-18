@@ -30,7 +30,7 @@ class NAPPacket:
 
     def deserialize(self, buffer):
         self.type, name_len = struct.unpack("BB", buffer[:2])
-        self.name = str(buffer[2:2 + name_len])
+        self.name = str(buffer[2 : 2 + name_len])
         return 2 + name_len
 
 
@@ -44,14 +44,14 @@ class XBOXDiscoverer:
 
     def __init__(
         self,
-        on_registered: Callable[[str, (str, int)], None],
         listen_ip="",
         xbdm_port=XBDM_PORT,
+        on_discover: Callable[[str, (str, int)], None] = None,
     ):
         self.listen_ip = listen_ip
         self.xbdm_port = xbdm_port
         self.broadcast_interval = self.DISCOVERY_BROADCAST_INTERVAL_SECONDS
-        self.on_registered = on_registered
+        self.on_discover = on_discover
         self._xbox_registry_lock = threading.RLock()
         self._xbox_name_registry = collections.defaultdict(set)
         self._xbox_ip_registry = {}
@@ -68,6 +68,13 @@ class XBOXDiscoverer:
         self._running = True
         self._discovery_thread.start()
 
+    def set_on_discover_callback(self, on_discover: Callable[[str, (str, int)], None]):
+        self.on_discover = on_discover
+
+    def get_registered_devices(self) -> [str, (str, int)]:
+        with self._xbox_registry_lock:
+            return list(self._xbox_ip_registry.items())
+
     def register(self, name, addr):
         with self._xbox_registry_lock:
             if addr in self._xbox_ip_registry:
@@ -78,8 +85,8 @@ class XBOXDiscoverer:
             self._xbox_name_registry[name].add(addr)
             self._xbox_ip_registry[addr] = name
 
-        if self.on_registered:
-            self.on_registered(name, addr)
+        if self.on_discover:
+            self.on_discover(name, addr)
 
     def shutdown(self):
         print("Shutting down discovery process.")

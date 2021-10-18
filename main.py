@@ -3,10 +3,12 @@
 
 import argparse
 import sys
-import time
+
+import wx
 
 from gdbxbdmbridge import bridge
 from gdbxbdmbridge import discoverer
+from gdbxbdmbridge import gui
 
 XBDM_PORT = 731
 
@@ -34,24 +36,34 @@ def main(args):
 
     bridge_manager = BridgeManager()
 
-    def add_bridge(name: str, addr: (str, int)) -> None:
-        bridge_manager.start_bridge(args.discovery_listen_ip, name, addr)
-
-    discover = discoverer.XBOXDiscoverer(
-        add_bridge, args.discovery_listen_ip, args.discovery_listen_port
+    xbox_discoverer = discoverer.XBOXDiscoverer(
+        args.discovery_listen_ip, args.discovery_port
     )
 
     if args.xbox:
         for entry in args.xbox:
             (name, ip, port) = entry[0]
-            discover.register(name, (ip, port))
+            xbox_discoverer.register(name, (ip, port))
+
+    app = wx.App()
+    frame = gui.MainFrame(title="GDB <-> XBDM Bridge")
+    frame.set_discovered_devices(xbox_discoverer.get_registered_devices())
+    frame.Show()
+
+    def add_bridge(name: str, addr: (str, int)) -> None:
+        bridge_manager.start_bridge(args.discovery_listen_ip, name, addr)
+        frame.set_discovered_devices(xbox_discoverer.get_registered_devices())
+
+    xbox_discoverer.set_on_discover_callback(add_bridge)
 
     try:
-        discover.start()
-        while True:
-            time.sleep(1000)
+        xbox_discoverer.start()
+        app.MainLoop()
+        xbox_discoverer.shutdown()
+        bridge_manager.shutdown()
+
     except KeyboardInterrupt:
-        discover.shutdown()
+        xbox_discoverer.shutdown()
         bridge_manager.shutdown()
         return 0
 
@@ -94,11 +106,11 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "-dp",
-        "--discovery_listen_port",
+        "--discovery_port",
         nargs=1,
         type=int,
         default=discoverer.XBOXDiscoverer.XBDM_PORT,
-        help="Port to listen on for XBOX devkits.",
+        help="Port on which XBDM listens for discovery of XBOX devkits.",
     )
 
     args = parser.parse_args()

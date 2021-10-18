@@ -29,12 +29,10 @@ class GDBXBDMBridge:
         )
 
         self._gdb = ip_transport.IPTransport(
-            lambda transport: self._process_gdb_data(transport),
-            "GDB"
+            lambda transport: self._process_gdb_data(transport), "GDB"
         )
         self._xbdm = ip_transport.IPTransport(
-            lambda transport: self._process_xbdm_data(transport),
-            "XBDM"
+            lambda transport: self._process_xbdm_data(transport), "XBDM"
         )
 
         self._xbdm_state = self.STATE_INIT
