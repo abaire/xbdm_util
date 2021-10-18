@@ -50,6 +50,8 @@ def main(args):
     frame.set_discovered_devices(xbox_discoverer.get_registered_devices())
     frame.Show()
 
+    frame.Bind(gui.MainFrame.EVT_LAUNCH_XBDM_BROWSER, launch_xbdm_browser)
+
     def add_bridge(name: str, addr: (str, int)) -> None:
         bridge_manager.start_bridge(args.discovery_listen_ip, name, addr)
         frame.set_discovered_devices(xbox_discoverer.get_registered_devices())
@@ -68,6 +70,11 @@ def main(args):
         return 0
 
     return 0
+
+
+def launch_xbdm_browser(evt: gui.MainFrame.LaunchXBDMBrowserEvent):
+    xbox_addr = evt.addr
+    print(xbox_addr)
 
 
 def xbox_addr(value):

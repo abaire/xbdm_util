@@ -1,9 +1,15 @@
 import wx
 import wx.grid
+import wx.lib.newevent
+
+LaunchXBDMBrowserEvent, EVT_LAUNCH_XBDM_BROWSER = wx.lib.newevent.NewCommandEvent()
 
 
 class MainFrame(wx.Frame):
     """Main window"""
+
+    LaunchXBDMBrowserEvent = LaunchXBDMBrowserEvent
+    EVT_LAUNCH_XBDM_BROWSER = EVT_LAUNCH_XBDM_BROWSER
 
     def __init__(self, title: str, *args, **kw):
         super().__init__(*args, parent=None, title=title, **kw)
@@ -36,7 +42,6 @@ class _XBDMGrid(wx.grid.Grid):
         self.SetColMinimalWidth(0, 120)
         self.AutoSizeColumns()
 
-        self.Bind(wx.grid.EVT_GRID_CELL_RIGHT_CLICK, self.OnCellRightClick)
         self.Bind(wx.grid.EVT_GRID_CELL_LEFT_DCLICK, self.OnCellLeftDClick)
 
     def set_rows(self, rows: [((str, int), str)]):
@@ -50,14 +55,9 @@ class _XBDMGrid(wx.grid.Grid):
 
         self.AutoSize()
 
-    def OnCellRightClick(self, evt):
-        print("RCLICK")
-        # self.log.write("OnCellRightClick: (%d,%d) %s\n" %
-        #                (evt.GetRow(), evt.GetCol(), evt.GetPosition()))
-        evt.Skip()
-
     def OnCellLeftDClick(self, evt):
-        print("DCLICK")
-        # self.log.write("OnCellLeftDClick: (%d,%d) %s\n" %
-        #                (evt.GetRow(), evt.GetCol(), evt.GetPosition()))
+        row = evt.GetRow()
+        addr = self.GetCellValue(row, 1)
+        new_event = LaunchXBDMBrowserEvent(evt.GetEventObject().GetId(), addr=addr)
+        wx.PostEvent(self, new_event)
         evt.Skip()
