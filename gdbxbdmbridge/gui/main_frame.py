@@ -2,6 +2,8 @@ import wx
 import wx.grid
 import wx.lib.newevent
 
+from gdbxbdmbridge import bridge_info
+
 LaunchXBDMBrowserEvent, EVT_LAUNCH_XBDM_BROWSER = wx.lib.newevent.NewCommandEvent()
 
 
@@ -16,7 +18,7 @@ class MainFrame(wx.Frame):
 
         self.xbdm_table = _XBDMGrid(self)
 
-    def set_discovered_devices(self, discovered_devices: [((str, int), str)]):
+    def set_discovered_devices(self, discovered_devices: [bridge_info.BridgeInfo]):
         self.xbdm_table.set_rows(sorted(discovered_devices, key=lambda x: x[1]))
 
 
@@ -24,7 +26,7 @@ class _XBDMGrid(wx.grid.Grid):
     def __init__(self, parent, *args, **kw):
         super().__init__(*args, parent=parent, **kw)
 
-        self.CreateGrid(0, 2)
+        self.CreateGrid(0, 3)
         self.SetSelectionMode(wx.grid.Grid.GridSelectRows)
         self.EnableEditing(False)
         self.DisableDragColMove()
@@ -36,22 +38,25 @@ class _XBDMGrid(wx.grid.Grid):
         self.SetCellHighlightROPenWidth(0)
 
         self.SetColLabelValue(0, "Name")
-        self.SetColLabelValue(1, "Address")
+        self.SetColLabelValue(1, "XBOX Address")
+        self.SetColLabelValue(2, "GDB Address")
 
-        self.SetColMinimalAcceptableWidth(120)
-        self.SetColMinimalWidth(0, 120)
         self.AutoSizeColumns()
 
         self.Bind(wx.grid.EVT_GRID_CELL_LEFT_DCLICK, self.OnCellLeftDClick)
 
-    def set_rows(self, rows: [((str, int), str)]):
+    def set_rows(self, rows: [bridge_info.BridgeInfo]):
         self.ClearGrid()
         self.InsertRows(numRows=len(rows))
 
         for row_index in range(0, len(rows)):
             row = rows[row_index]
-            self.SetCellValue(row_index, 0, row[1])
-            self.SetCellValue(row_index, 1, f"{row[0][0]}:{row[0][1]}")
+            self.SetCellValue(row_index, 0, row.xbox_name)
+            self.SetCellValue(row_index, 1, f"{row.xbox_addr[0]}:{row.xbox_addr[1]}")
+            listen_ip = row.listen_addr[0]
+            if listen_ip == "0.0.0.0":
+                listen_ip = ""
+            self.SetCellValue(row_index, 2, f"{listen_ip}:{row.listen_addr[1]}")
 
         self.AutoSize()
 

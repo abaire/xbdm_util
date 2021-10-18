@@ -40,7 +40,7 @@ class XBOXDiscoverer:
     XBDM_PORT = 731
 
     # Interval between NAP discovery packets.
-    DISCOVERY_BROADCAST_INTERVAL_SECONDS = 0.75
+    DISCOVERY_BROADCAST_INTERVAL_SECONDS = 2
 
     def __init__(
         self,

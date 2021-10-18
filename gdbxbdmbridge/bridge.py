@@ -23,9 +23,9 @@ class GDBXBDMBridge:
         self._listen_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._listen_sock.bind((self.listen_ip, 0))
         self._listen_sock.listen(1)
-        self._listen_addr = self._listen_sock.getsockname()
+        self.listen_addr = self._listen_sock.getsockname()
         print(
-            f"Bridging connections to {self.xbox_info} at port {self._listen_addr[1]}"
+            f"Bridging connections to {self.xbox_info} at port {self.listen_addr[1]}"
         )
 
         self._gdb = ip_transport.IPTransport(
@@ -111,7 +111,7 @@ class GDBXBDMBridge:
         return True
 
     def _close_listen_socket(self):
-        print(f"Closing GDB bridge to {self.xbox_info} at {self._listen_addr[1]}")
+        print(f"Closing GDB bridge to {self.xbox_info} at {self.listen_addr[1]}")
         self._listen_sock.close()
 
     def _connect_to_xbdm(self):

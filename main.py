@@ -6,44 +6,20 @@ import sys
 
 import wx
 
-from gdbxbdmbridge import bridge
+from gdbxbdmbridge import bridge_manager
 from gdbxbdmbridge import discoverer
 from gdbxbdmbridge import gui
 
 XBDM_PORT = 731
 
 
-class BridgeManager:
-    def __init__(self):
-        self._bridges = set()
-        self._bridge_ips = set()
-
-    def start_bridge(self, listen_ip, xbox_name, xbox_addr):
-        if xbox_addr in self._bridge_ips:
-            return
-        print(f"Adding bridge to {xbox_name}@{xbox_addr}")
-        self._bridges.add(bridge.GDBXBDMBridge(listen_ip, xbox_name, xbox_addr))
-
-    def shutdown(self):
-        print("Shutting down bridges.")
-        for bridge in self._bridges:
-            bridge.shutdown()
-        print("Bridges shut down.")
-
-
 def main(args):
     print("Startup")
 
-    bridge_manager = BridgeManager()
-
+    manager = bridge_manager.BridgeManager()
     xbox_discoverer = discoverer.XBOXDiscoverer(
         args.discovery_listen_ip, args.discovery_port
     )
-
-    if args.xbox:
-        for entry in args.xbox:
-            (name, ip, port) = entry[0]
-            xbox_discoverer.register(name, (ip, port))
 
     app = wx.App()
     frame = gui.MainFrame(title="GDB <-> XBDM Bridge")
@@ -53,20 +29,25 @@ def main(args):
     frame.Bind(gui.MainFrame.EVT_LAUNCH_XBDM_BROWSER, launch_xbdm_browser)
 
     def add_bridge(name: str, addr: (str, int)) -> None:
-        bridge_manager.start_bridge(args.discovery_listen_ip, name, addr)
-        frame.set_discovered_devices(xbox_discoverer.get_registered_devices())
+        manager.start_bridge(args.discovery_listen_ip, name, addr)
+        frame.set_discovered_devices(manager.get_bridge_infos())
 
     xbox_discoverer.set_on_discover_callback(add_bridge)
+
+    if args.xbox:
+        for entry in args.xbox:
+            (name, ip, port) = entry[0]
+            xbox_discoverer.register(name, (ip, port))
 
     try:
         xbox_discoverer.start()
         app.MainLoop()
         xbox_discoverer.shutdown()
-        bridge_manager.shutdown()
+        manager.shutdown()
 
     except KeyboardInterrupt:
         xbox_discoverer.shutdown()
-        bridge_manager.shutdown()
+        manager.shutdown()
         return 0
 
     return 0
