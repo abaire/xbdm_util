@@ -1398,6 +1398,30 @@ class Modules(_ProcessedCommand):
         super().__init__("modules", response_class=self.Response, handler=handler)
 
 
+class Notify(_ProcessedCommand):
+    """Registers connection as a notification channel."""
+
+    class Response(_ProcessedResponse):
+        pass
+
+    def __init__(self, handler=None):
+        super().__init__("notify", response_class=self.Response, handler=handler)
+
+        # TODO: Convert the channel parser to notification mode.
+        # Looks like notifications are sent w/ '\r\n' termination but no prefix.
+        # NotifyAt can be sent on the channel, triggering a response.
+
+
+class NotifyAt(_ProcessedCommand):
+    """???"""
+
+    class Response(_ProcessedResponse):
+        pass
+
+    def __init__(self, handler=None):
+        super().__init__("notifyat", response_class=self.Response, handler=handler)
+
+
 class _StopOnBase(_ProcessedCommand):
     """Base class for NoStopOn and StopOn"""
 
