@@ -1,4 +1,5 @@
 """Provides utilities in support of Remote Debugging and Control Protocol."""
+import enum
 import ipaddress
 import logging
 from typing import Callable
@@ -21,7 +22,7 @@ class RDCPCommand:
         # "boxid",  # Can only be executed if security is enabled.
         "break",  # now, start, clearall, clear, addr, read, write, execute, size
         "bye",
-        "capctrl", # () > 400
+        "capctrl",  # () > 400
         "continue",
         "crashdump",
         "d3dopcode",
@@ -224,6 +225,87 @@ class AltAddr(_ProcessedCommand):
 
     def __init__(self, handler=None):
         super().__init__("altaddr", response_class=self.Response, handler=handler)
+
+
+class _Break(_ProcessedCommand):
+    """Manages breakpoints."""
+
+    class Response(_ProcessedResponse):
+        pass
+
+    def __init__(self, handler=None):
+        super().__init__("break", response_class=self.Response, handler=handler)
+
+
+class BreakNow(_Break):
+    """Break into debugger immediately."""
+
+    def __init__(self, handler=None):
+        super().__init__(handler)
+        self.body = b" now"
+
+
+class BreakAtStart(_Break):
+    """Break into debugger at process start."""
+
+    def __init__(self, handler=None):
+        super().__init__(handler)
+        self.body = b" start"
+
+
+class BreakClearAll(_Break):
+    """Clears all breakpoints."""
+
+    def __init__(self, handler=None):
+        super().__init__(handler)
+        self.body = b" clearall"
+
+
+class BreakAtAddress(_Break):
+    """Adds or clears a breakpoint at the given memory address."""
+
+    def __init__(self, address: int, clear: bool = False, handler=None):
+        super().__init__(handler)
+        clear_string = "clear " if clear else ""
+        self.body = bytes(f" {clear_string}addr={address}")
+
+
+class _BreakRange(_Break):
+    """Breaks on access to a memory range."""
+
+    def __init__(
+        self,
+        access_type: str,
+        address: int,
+        size: int = 0,
+        clear: bool = False,
+        handler=None,
+    ):
+        super().__init__(handler)
+        clear_string = "clear " if clear else ""
+        size_string = f"size={size}" if not clear else ""
+        self.body = bytes(f" {clear_string}{access_type}={address}{size_string}")
+
+
+class BreakOnRead(_BreakRange):
+    """Adds or clears a breakpoint when reading the given memory range."""
+
+    def __init__(self, address: int, size: int = 0, clear: bool = False, handler=None):
+        super().__init__("read", address, size, clear, handler)
+
+
+class BreakOnWrite(_BreakRange):
+    """Adds or clears a breakpoint when writing the given memory range."""
+
+    def __init__(self, address: int, size: int = 0, clear: bool = False, handler=None):
+        super().__init__("write", address, size, clear, handler)
+
+
+class BreakOnExecute(_BreakRange):
+    """Adds or clears a breakpoint when executing the given memory range."""
+
+    def __init__(self, address: int, size: int = 0, clear: bool = False, handler=None):
+        super().__init__("execute", address, size, clear, handler)
 
 
 class Bye(_ProcessedCommand):
