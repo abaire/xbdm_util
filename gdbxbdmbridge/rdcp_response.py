@@ -40,8 +40,13 @@ def parse_data_map(data: bytes) -> {bytes, bytes}:
     ret = {}
     items = buffer.split(b" ")
     for item in items:
-        key, value = item.split(b"=")
-        ret[bytes(key)] = bytes(value).replace(ESCAPED_SPACE, b" ")
+        keyval = item.split(b"=")
+        if len(keyval) == 2:
+            key, value = keyval
+            ret[bytes(key)] = bytes(value).replace(ESCAPED_SPACE, b" ")
+        else:
+            # The value is a flag, treat it as a True
+            ret[bytes(keyval[0])] = bytes("1", "utf-8")
     return ret
 
 
