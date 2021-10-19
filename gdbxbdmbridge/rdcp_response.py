@@ -1,5 +1,7 @@
 """Models responses to Remote Debugging and Control Protocol commands."""
 import logging
+import struct
+import sys
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +91,9 @@ class RDCPResponse:
     MULTILINE_TERMINATOR = b"\r\n.\r\n"
     STR_BODY_CUTOFF = 64
 
+    BINARY_NO_BINARY_ALLOWED = -1
+    BINARY_FIRST_DWORD_HAS_SIZE = -2
+
     STATUS_OK = 200
     STATUS_CONNECTED = 201
     STATUS_MULTILINE_RESPONSE = 202
@@ -134,7 +139,10 @@ class RDCPResponse:
     def __str__(self):
         size = len(self.data)
         if self.message:
-            message = self.message.decode("utf-8")
+            try:
+                message = self.message.decode("utf-8")
+            except UnicodeDecodeError:
+                message = "<Non unicode data>"
         else:
             message = self.STATUS_CODES.get(self.status, "??INVALID??")
 
@@ -171,7 +179,7 @@ class RDCPResponse:
         buffer = self.data.replace(self.TERMINATOR, b" ").strip()
         return parse_data_map(buffer)
 
-    def parse(self, buffer: bytes, binary_response_length: int = -1):
+    def parse(self, buffer: bytes, binary_response_length: int = -1) -> int:
         terminator = buffer.find(self.TERMINATOR)
         terminator_len = len(self.TERMINATOR)
         if terminator < 0:
@@ -194,7 +202,10 @@ class RDCPResponse:
             self.message = buffer[5 : body_start - terminator_len]
             terminator_len = len(self.MULTILINE_TERMINATOR)
         elif self.status == self.STATUS_BINARY_RESPONSE:
-            if binary_response_length < 0:
+            body_start = terminator + terminator_len
+            message_end = body_start - terminator_len
+
+            if binary_response_length == self.BINARY_NO_BINARY_ALLOWED:
                 logger.error(
                     "Unexpectedly received binary response to a non-binary request"
                 )
@@ -202,10 +213,20 @@ class RDCPResponse:
                     False
                     and "Unexpectedly received binary response to a non-binary request"
                 )
-            body_start = terminator + terminator_len
+                sys.exit(1)
+
+            elif binary_response_length == self.BINARY_FIRST_DWORD_HAS_SIZE:
+                if len(buffer) - body_start < 4:
+                    return 0
+
+                size = buffer[body_start : body_start + 4]
+                binary_response_length = struct.unpack("I", size)[0]
+                body_start += 4
+                terminator += 4
+
             if len(buffer) - body_start < binary_response_length:
                 return 0
-            self.message = buffer[5 : body_start - terminator_len]
+            self.message = buffer[5:message_end]
             self.data = buffer[body_start : body_start + binary_response_length]
             terminator += binary_response_length
         else:

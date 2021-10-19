@@ -49,7 +49,7 @@ class XBDMTransport(ip_transport.IPTransport):
     def _process_xbdm_data(self, transport: ip_transport.IPTransport):
         response = rdcp_response.RDCPResponse()
 
-        binary_response_length = 0
+        binary_response_length = response.BINARY_NO_BINARY_ALLOWED
         if self._command_queue:
             binary_response_length = self._command_queue[
                 0
@@ -64,7 +64,7 @@ class XBDMTransport(ip_transport.IPTransport):
                 break
             transport.shift_read_buffer(bytes_procesed)
 
-            binary_response_length = 0
+            binary_response_length = response.BINARY_NO_BINARY_ALLOWED
             if self._command_queue:
                 binary_response_length = self._command_queue[
                     0

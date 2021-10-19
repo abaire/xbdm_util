@@ -195,7 +195,10 @@ class _ProcessedResponse:
 
     def __str__(self):
         if self._message:
-            message = self._message.decode("utf-8")
+            try:
+                message = self._message.decode("utf-8")
+            except UnicodeDecodeError:
+                message = "<Non unicode data>"
         else:
             message = rdcp_response.RDCPResponse.STATUS_CODES.get(
                 self._status, "??INVALID??"
@@ -697,15 +700,49 @@ class GetExtContext(_ProcessedCommand):
         def _body_str(self) -> str:
             return f"{self.printable_data}"
 
-    def __init__(
-        self,
-        thread_id,
-        handler=None,
-    ):
+    def __init__(self, thread_id, handler=None):
         super().__init__("getextcontext", response_class=self.Response, handler=handler)
         thread_id_str = "%d" % thread_id
         self.body = bytes(f" thread={thread_id_str}", "utf-8")
         self._binary_response_length = 516
+
+
+class GetFile(_ProcessedCommand):
+    """Retrieves the content of a file."""
+
+    class Response(_ProcessedRawBodyResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            self.printable_data = ""
+            self.data = bytes()
+
+            if not self.ok:
+                return
+
+            self.data = response.data
+            # TODO: Consider dropping printable_data.
+            self.printable_data = binascii.hexlify(self.data)
+
+        @property
+        def ok(self):
+            return self._status == rdcp_response.RDCPResponse.STATUS_BINARY_RESPONSE
+
+        @property
+        def _body_str(self) -> str:
+            return f"{self.printable_data}"
+
+    def __init__(self, name: str, offset_and_size: (int, int) = None, handler=None):
+        super().__init__("getfile", response_class=self.Response, handler=handler)
+        if offset_and_size:
+            chunk_str = " offset=0x%X size=0x%X" % offset_and_size
+        else:
+            chunk_str = ""
+
+        self.body = bytes(f' name="{name}"{chunk_str}', "utf-8")
+        self._binary_response_length = (
+            rdcp_response.RDCPResponse.BINARY_FIRST_DWORD_HAS_SIZE
+        )
 
 
 class GetMem(_ProcessedCommand):
