@@ -1097,6 +1097,16 @@ class IsStopped(_ProcessedCommand):
         self.body = bytes(f" thread={thread_id}", "utf-8")
 
 
+class IRTSweep(_ProcessedCommand):
+    """???"""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(self, handler=None):
+        super().__init__("irtsweep", response_class=self.Response, handler=handler)
+
+
 class MemoryMapGlobal(_ProcessedCommand):
     """Returns info about the global memory map."""
 
