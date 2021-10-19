@@ -1572,6 +1572,17 @@ class Reboot(_ProcessedCommand):
             self.body = body
 
 
+class Rename(_ProcessedCommand):
+    """Renames a file or directory."""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(self, name: str, new_name: str, handler=None):
+        super().__init__("rename", response_class=self.Response, handler=handler)
+        self.body = bytes(' name="%s" newname="%s"' % (name, new_name), "utf-8")
+
+
 class Resume(_ProcessedCommand):
     """Resumes execution of the given thread."""
 

@@ -192,7 +192,9 @@ class XBDMDialog(wx.Dialog):
         # cmd = rdcp_command.GetMemBinary(0xB0011360, 128, handler=print)
         # self._bridge.send_rdcp_command(cmd)
 
-        cmd = rdcp_command.Reboot(rdcp_command.Reboot.FLAG_WARM, handler=print)
+        cmd = rdcp_command.Rename(
+            "e:\\Tools\\TestDir", "e:\\Tools\\RenamedTestDir", handler=print
+        )
         self._bridge.send_rdcp_command(cmd)
 
     def _on_send(self, evt):
