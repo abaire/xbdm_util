@@ -1124,6 +1124,40 @@ class KernelDebug(_ProcessedCommand):
         self.body = mode.value
 
 
+# class KeyExchange(_ProcessedCommand):
+#     """???"""
+#
+#     class Response(_ProcessedRawBodyResponse):
+#         pass
+#
+#     def __init__(self, handler=None):
+#         super().__init__("keyxchg", response_class=self.Response, handler=handler)
+#         # TODO: Need to immediately queue the key binary data as well.
+
+
+class LOP(_ProcessedCommand):
+    """Profiler command???"""
+
+    class Command(enum.Enum):
+        START_EVENT = b" cmd=start event="
+        START_COUNTER = b" cmd=start counter="
+        STOP = b" cmd=stop"
+        INFO = b" cmd=info"
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(
+        self, command: Command, command_data: Optional[int] = None, handler=None
+    ):
+        super().__init__("lop", response_class=self.Response, handler=handler)
+        self.body = command.value
+        if command == self.Command.START_EVENT or command == self.Command.START_COUNTER:
+            if not command_data:
+                command_data = 0
+            self.body += bytes("0x%X" % command_data, "utf-8")
+
+
 class MemoryMapGlobal(_ProcessedCommand):
     """Returns info about the global memory map."""
 
