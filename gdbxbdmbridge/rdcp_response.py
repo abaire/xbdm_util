@@ -4,6 +4,47 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def parse_array(data: bytes) -> [bytes]:
+    """Processes data as a list of lines."""
+    if not data:
+        return []
+
+    return data.split(RDCPResponse.TERMINATOR)
+
+
+def parse_data_map_array(data: bytes) -> [{bytes, bytes}]:
+    """Process data as a \r\n delimited list of key=value maps."""
+    maps = parse_array(data)
+    return [parse_data_map(m) for m in maps]
+
+
+def parse_data_map(data: bytes) -> {bytes, bytes}:
+    """Processes data as a space-delimited list of key=value pairs."""
+    if not data:
+        return {}
+
+    buffer = data.replace(RDCPResponse.TERMINATOR, b" ").strip()
+
+    # Temporarily replace spaces between quotes with non-printable
+    # characters (XBDM should not send non-printable chars inside quotes)
+    # they will be restored
+    quoted_sections = buffer.split(b'"')
+    buffer = bytearray()
+    ESCAPED_SPACE = bytes([1])
+    for i, section in enumerate(quoted_sections):
+        # Even sections are quoted
+        if (i & 0x01) == 1:
+            section = section.replace(b" ", ESCAPED_SPACE)
+        buffer.extend(section)
+
+    ret = {}
+    items = buffer.split(b" ")
+    for item in items:
+        key, value = item.split(b"=")
+        ret[bytes(key)] = bytes(value).replace(ESCAPED_SPACE, b" ")
+    return ret
+
+
 def get_utf_property(property_map: {bytes: bytes}, key: bytes, default=None) -> str:
     """Returns the value of the given key as a UTF-8 string."""
     val = property_map.get(key, default)
@@ -83,7 +124,7 @@ class RDCPResponse:
     def __init__(self):
         self.status = 0
         self.message = bytes()
-        self.data = bytes
+        self.data = bytes()
 
     def __str__(self):
         size = len(self.data)
@@ -108,24 +149,16 @@ class RDCPResponse:
 
     def parse_multiline(self) -> [bytes]:
         """Processes self.data as a list of lines."""
-        if not self.data:
-            return []
+        return parse_array(self.data)
 
-        return self.data.split(self.TERMINATOR)
+    def parse_data_map_array(self) -> [bytes, bytes]:
+        """Process self.data as a \r\n delimited list of key=value maps."""
+        return parse_data_map_array(self.data)
 
     def parse_data_map(self) -> {bytes, bytes}:
         """Processes self.data as a space-delimited list of key=value pairs."""
-        if not self.data:
-            return {}
-
         buffer = self.data.replace(self.TERMINATOR, b" ").strip()
-
-        ret = {}
-        items = buffer.split(b" ")
-        for item in items:
-            key, value = item.split(b"=")
-            ret[bytes(key)] = bytes(value)
-        return ret
+        return parse_data_map(buffer)
 
     def parse(self, buffer: bytes):
         terminator = buffer.find(self.TERMINATOR)

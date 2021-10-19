@@ -659,6 +659,39 @@ class IsStopped(_ProcessedCommand):
         self.body = bytes(f" thread={thread_id}", "utf-8")
 
 
+class PerformanceCounterList(_ProcessedCommand):
+    """Returns the list of performance counters and their types."""
+
+    class Response(_ProcessedRawBodyResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            self.performance_counters = []
+
+            if not self.ok:
+                return
+
+            entries = response.parse_data_map_array()
+            for entry in entries:
+                self.performance_counters.append(
+                    {
+                        "name": rdcp_response.get_utf_property(entry, b"name"),
+                        "type": rdcp_response.get_int_property(entry, b"type"),
+                    }
+                )
+
+        @property
+        def ok(self):
+            return self._status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+
+        @property
+        def _body_str(self) -> str:
+            return f"{self.performance_counters}"
+
+    def __init__(self, handler=None):
+        super().__init__("pclist", response_class=self.Response, handler=handler)
+
+
 class PDBInfo(_ProcessedCommand):
     """Retrieves Program Database information."""
 
@@ -761,6 +794,7 @@ class Systime(_ProcessedCommand):
 
             if not self.ok:
                 self.time = None
+                return
 
             entries = response.parse_data_map()
             self.time = rdcp_response.get_qword_property(entries, b"low", b"high")
