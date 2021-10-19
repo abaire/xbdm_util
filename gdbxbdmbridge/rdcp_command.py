@@ -530,11 +530,52 @@ class DirList(_ProcessedCommand):
     """Lists contents of a path."""
 
     class Response(_ProcessedResponse):
-        pass
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            self.entries = []
+
+            if not self.ok:
+                return
+
+            # name="AudioConsole"
+            # sizehi=0x0
+            # sizelo=0x0
+            # createhi=0x01d79c1b
+            # createlo=0x3d775600
+            # changehi=0x01d79c1b
+            # changelo=0x7a434d00
+            # directory
+
+            entries = response.parse_data_map_array()
+            for entry in entries:
+                entry_info = {
+                    "name": rdcp_response.get_utf_property(entry, b"name"),
+                    "filesize": rdcp_response.get_qword_property(
+                        entry, b"sizelo", b"sizehi"
+                    ),
+                    "create_timestamp": rdcp_response.get_qword_property(
+                        entry, b"createlo", b"createhi"
+                    ),
+                    "change_timestamp": rdcp_response.get_qword_property(
+                        entry, b"changelo", b"changehi"
+                    ),
+                    "directory": rdcp_response.get_bool_property(entry, b"directory"),
+                }
+
+                self.entries.append(entry_info)
+
+        @property
+        def ok(self):
+            return self._status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+
+        @property
+        def _body_str(self) -> str:
+            return f"{self.entries}"
 
     def __init__(self, name, handler=None):
         super().__init__("dirlist", response_class=self.Response, handler=handler)
-        self.body = bytes(f' name="name"', "utf-8")
+        self.body = bytes(f' name="{name}"', "utf-8")
 
 
 class DMVersion(_ProcessedCommand):
@@ -775,13 +816,24 @@ class GetFileAttributes(_ProcessedCommand):
         def __init__(self, response: rdcp_response.RDCPResponse):
             super().__init__(response)
 
+            self.filesize = None
+            self.create_timestamp = None
+            self.change_timestamp = None
+            self.flags = {}
+
             if not self.ok:
-                self.filesize = None
-                self.create_timestamp = None
-                self.change_timestamp = None
                 return
 
             entries = response.parse_data_map()
+            handled_keys = {
+                b"sizelo",
+                b"sizehi",
+                b"createlo",
+                b"createhi",
+                b"changelo",
+                b"changehi",
+                b"directory",
+            }
             self.filesize = rdcp_response.get_qword_property(
                 entries, b"sizelo", b"sizehi"
             )
@@ -791,6 +843,14 @@ class GetFileAttributes(_ProcessedCommand):
             self.change_timestamp = rdcp_response.get_qword_property(
                 entries, b"changelo", b"changehi"
             )
+            self.directory = rdcp_response.get_bool_property(entries, b"directory")
+
+            for key in entries.keys():
+                if key in handled_keys:
+                    continue
+                self.flags[key.decode("utf-8")] = rdcp_response.get_bool_property(
+                    entries, key
+                )
 
         @property
         def ok(self):
@@ -798,7 +858,7 @@ class GetFileAttributes(_ProcessedCommand):
 
         @property
         def _body_str(self) -> str:
-            return f" size: {self.filesize} create_time: {self.create_timestamp} change_time={self.change_timestamp}"
+            return f" size: {self.filesize} create_time: {self.create_timestamp} change_time: {self.change_timestamp} directory: {self.directory} flags: {self.flags}"
 
     def __init__(self, name: str, handler=None):
         super().__init__(
@@ -1706,6 +1766,43 @@ class SetContext(_ProcessedCommand):
         self.body = b" thread=0x%X " % thread_id
         if ext is not None:
             self.body += b" ext=0x%X" % ext
+
+
+class SetFileAttributes(_ProcessedCommand):
+    """Sets the attributes of a file."""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(
+        self,
+        name: str,
+        readonly: Optional[bool] = None,
+        hidden: Optional[bool] = None,
+        create_timestamp: Optional[int] = None,
+        change_timestamp: Optional[int] = None,
+        handler=None,
+    ):
+        super().__init__(
+            "setfileattributes", response_class=self.Response, handler=handler
+        )
+        self.body = bytes(f' name="{name}"', "utf-8")
+        if readonly is not None:
+            readonly = 1 if readonly else 0
+            self.body += b" readonly=0x%X" % readonly
+        if hidden is not None:
+            hidden = 1 if readonly else 0
+            self.body += b" hidden=0x%X" % hidden
+        if create_timestamp is not None:
+            self.body += b" createlo:0x%X createhi:0x%X" % (
+                create_timestamp & 0xFFFFFFFF,
+                (create_timestamp >> 32) & 0xFFFFFFFF,
+            )
+        if change_timestamp is not None:
+            self.body += b" changelo:0x%X changehi:0x%X" % (
+                change_timestamp & 0xFFFFFFFF,
+                (change_timestamp >> 32) & 0xFFFFFFFF,
+            )
 
 
 class Stop(_ProcessedCommand):

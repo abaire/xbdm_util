@@ -195,23 +195,44 @@ class XBDMDialog(wx.Dialog):
         # cmd = rdcp_command.Stop()
         # self._bridge.send_rdcp_command(cmd)
 
-        cmd = rdcp_command.Threads(handler=print)
+        # cmd = rdcp_command.Reboot(rdcp_command.Reboot.FLAG_WARM, handler=print)
+        # self._bridge.send_rdcp_command(cmd)
+
+        # cmd = rdcp_command.Mkdir("e:\\Tools\\TestDir", handler=print)
+        # self._bridge.send_rdcp_command(cmd)
+        #
+        # cmd = rdcp_command.DirList("e:\\Tools\\", handler=print)
+        # self._bridge.send_rdcp_command(cmd)
+        #
+        # cmd = rdcp_command.SendFile("e:\\Tools\\TestDir\\test.txt", b"File content", handler=print)
+        # self._bridge.send_rdcp_command(cmd)
+
+        cmd = rdcp_command.GetFileAttributes("e:\\Tools\\TestDir", handler=print)
         self._bridge.send_rdcp_command(cmd)
 
-        cmd = rdcp_command.Halt(48, handler=print)
-        self._bridge.send_rdcp_command(cmd)
+        # cmd = rdcp_command.SetFileAttributes("e:\\Tools\\TestDir\\test.txt", create_timestamp=132000000000000000, handler=print)
+        # self._bridge.send_rdcp_command(cmd)
+        #
+        # cmd = rdcp_command.GetFileAttributes("e:\\Tools\\TestDir\\test.txt", handler=print)
+        # self._bridge.send_rdcp_command(cmd)
 
-        cmd = rdcp_command.SetContext(48, handler=print)
-        self._bridge.send_rdcp_command(cmd)
-
-        cmd = rdcp_command.GetContext(48, handler=print)
-        self._bridge.send_rdcp_command(cmd)
-
-        cmd = rdcp_command.Resume(48, handler=print)
-        self._bridge.send_rdcp_command(cmd)
-
-        cmd = rdcp_command.Go(handler=print)
-        self._bridge.send_rdcp_command(cmd)
+        # cmd = rdcp_command.Threads(handler=print)
+        # self._bridge.send_rdcp_command(cmd)
+        #
+        # cmd = rdcp_command.Halt(48, handler=print)
+        # self._bridge.send_rdcp_command(cmd)
+        #
+        # cmd = rdcp_command.SetContext(48, handler=print)
+        # self._bridge.send_rdcp_command(cmd)
+        #
+        # cmd = rdcp_command.GetContext(48, handler=print)
+        # self._bridge.send_rdcp_command(cmd)
+        #
+        # cmd = rdcp_command.Resume(48, handler=print)
+        # self._bridge.send_rdcp_command(cmd)
+        #
+        # cmd = rdcp_command.Go(handler=print)
+        # self._bridge.send_rdcp_command(cmd)
 
     def _on_send(self, evt):
         index = self._input.GetSelection()
