@@ -460,12 +460,35 @@ class DebugMode(_ProcessedCommand):
 
 
 class DirList(_ProcessedCommand):
+    """Lists contents of a path."""
+
     class Response(_ProcessedResponse):
         pass
 
     def __init__(self, name, handler=None):
         super().__init__("dirlist", response_class=self.Response, handler=handler)
         self.body = bytes(f' name="name"', "utf-8")
+
+
+class DMVersion(_ProcessedCommand):
+    """Returns the debug monitor version."""
+
+    class Response(_ProcessedResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            if not self.ok:
+                self.version = None
+                return
+
+            self.version = response.data.decode("utf-8")
+
+        @property
+        def _body_str(self) -> str:
+            return f" version={self.version}"
+
+    def __init__(self, handler=None):
+        super().__init__("dmversion", response_class=self.Response, handler=handler)
 
 
 class DriveList(_ProcessedCommand):
