@@ -1684,6 +1684,17 @@ class SendFile(_ProcessedCommand):
 #         # There's a second mode that looks like it can take a command string that matches some internal state var
 
 
+class SetConfig(_ProcessedCommand):
+    """Sets an NVRAM configuration value."""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(self, index: int, value: int, handler=None):
+        super().__init__("setconfig", response_class=self.Response, handler=handler)
+        body = b" index=0x%X value=0x%X" % (index, value)
+
+
 class Stop(_ProcessedCommand):
     """Stops execution of all threads."""
 
