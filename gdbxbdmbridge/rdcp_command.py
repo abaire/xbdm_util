@@ -878,6 +878,18 @@ class GetMemBinary(_ProcessedCommand):
         self.body = bytes(f" ADDR={addr} LENGTH={length}", "utf-8")
 
 
+class GetPalette(_ProcessedCommand):
+    """Retrieves palette information (D3DINT_GET_PALETTE)."""
+
+    class Response(_ProcessedRawBodyResponse):
+        # TODO: Implement. Calling on the dashboard gives an error.
+        pass
+
+    def __init__(self, stage: int, handler=None):
+        super().__init__("getpalette", response_class=self.Response, handler=handler)
+        self.body = bytes(" STAGE=0x%X" % stage, "utf-8")
+
+
 class Go(_ProcessedCommand):
     """Resumes execution of all threads."""
 
