@@ -1180,6 +1180,38 @@ class MagicBoot(_ProcessedCommand):
         self.body = bytes(f' title="{title}"{flags}', "utf-8")
 
 
+class MemTrack(_ProcessedCommand):
+    """???."""
+
+    class Command(enum.Enum):
+        ENABLE = b" cmd=enable"  # (stackdepth, flags)
+        ENABLE_ONCE = b" cmd=enableonce"  # (stackdepth, flags)
+        DISABLE = b" cmd=disable"
+        SAVE = b" cmd=save"  # filename
+        QUERY_STACK_DEPTH = b" cmd=querystackdepth"
+        QUERY_TYPE = b" cmd=querytype"  # type
+        QUERY_FLAGS = b" cmd=queryflags"
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(
+        self,
+        command: Command,
+        command_args=None,
+        handler=None,
+    ):
+        super().__init__("memtrack", response_class=self.Response, handler=handler)
+        self.body = command.value
+
+        if command == self.Command.ENABLE or command == self.Command.ENABLE_ONCE:
+            self.body += bytes(" stackdepth=0x%X flags=0x%X" % command_args, "utf-8")
+        elif command == self.Command.SAVE:
+            self.body += bytes(' filename="%s"' % command_args, "utf-8")
+        elif command == self.Command.QUERY_TYPE:
+            self.body += bytes(" type=0x%X" % command_args, "utf-8")
+
+
 class MemoryMapGlobal(_ProcessedCommand):
     """Returns info about the global memory map."""
 
