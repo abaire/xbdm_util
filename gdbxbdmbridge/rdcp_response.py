@@ -156,6 +156,12 @@ class RDCPResponse:
         """Processes self.data as a list of lines."""
         return parse_array(self.data)
 
+    def parse_hex_data(self) -> (str, bytearray):
+        """Processes self.data as a chunk of hex values."""
+        lines = self.parse_multiline()
+        printable_value = (b"".join(lines)).decode("utf-8")
+        return printable_value, bytearray.fromhex(printable_value)
+
     def parse_data_map_array(self) -> [bytes, bytes]:
         """Process self.data as a \r\n delimited list of key=value maps."""
         return parse_data_map_array(self.data)
