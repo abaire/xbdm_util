@@ -612,6 +612,31 @@ class Halt(_ProcessedCommand):
         self.body = bytes(f" thread={thread_id}", "utf-8")
 
 
+class IsBreak(_ProcessedCommand):
+    """Checks to see if a breakpoint is set at the given address."""
+
+    class Response(_ProcessedResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            self.type = None
+
+            if not self.ok:
+                return
+
+            entries = response.parse_data_map()
+            self.type = rdcp_response.get_int_property(entries, b"type")
+
+        @property
+        def _body_str(self) -> str:
+            return f"type: {self.type}"
+
+    def __init__(self, addr, handler=None):
+        super().__init__("isbreak", response_class=self.Response, handler=handler)
+        addr_str = "0x%X" % addr
+        self.body = bytes(f" addr={addr_str}", "utf-8")
+
+
 class Resume(_ProcessedCommand):
     """Resumes execution of the given thread."""
 
