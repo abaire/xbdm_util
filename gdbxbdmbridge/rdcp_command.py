@@ -1594,6 +1594,33 @@ class Resume(_ProcessedCommand):
         self.body = bytes(f" thread={thread_id}", "utf-8")
 
 
+class Screenshot(_ProcessedCommand):
+    """Captures a screenshot from the device."""
+
+    class Response(_ProcessedResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            self.printable_data = ""
+            self.data = bytes()
+
+            if not self.ok:
+                return
+
+            self.printable_data, self.data = response.parse_hex_data()
+
+        @property
+        def ok(self):
+            return self._status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+
+        @property
+        def _body_str(self) -> str:
+            return f"{self.printable_data}"
+
+    def __init__(self, handler=None):
+        super().__init__("screenshot", response_class=self.Response, handler=handler)
+
+
 class Stop(_ProcessedCommand):
     """Stops execution of all threads."""
 
