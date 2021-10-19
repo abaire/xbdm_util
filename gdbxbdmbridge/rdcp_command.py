@@ -672,6 +672,42 @@ class GetD3DState(_ProcessedCommand):
         self._binary_response_length = 1180
 
 
+class GetExtContext(_ProcessedCommand):
+    """???"""
+
+    class Response(_ProcessedResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            self.printable_data = ""
+            self.data = bytes()
+
+            if not self.ok:
+                return
+
+            self.data = response.data
+            # TODO: Parse the response data and drop this.
+            self.printable_data = binascii.hexlify(self.data)
+
+        @property
+        def ok(self):
+            return self._status == rdcp_response.RDCPResponse.STATUS_BINARY_RESPONSE
+
+        @property
+        def _body_str(self) -> str:
+            return f"{self.printable_data}"
+
+    def __init__(
+        self,
+        thread_id,
+        handler=None,
+    ):
+        super().__init__("getextcontext", response_class=self.Response, handler=handler)
+        thread_id_str = "%d" % thread_id
+        self.body = bytes(f" thread={thread_id_str}", "utf-8")
+        self._binary_response_length = 516
+
+
 class GetMem(_ProcessedCommand):
     """Gets the contents of a block of memory."""
 
