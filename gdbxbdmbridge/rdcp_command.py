@@ -16,12 +16,12 @@ class RDCPCommand:
 
     COMMANDS = {
         "adminpw",
-        "altaddr",  #  addr=0x0a000210
-        "authuser",
+        "altaddr",  #  > addr=0x0a000210
+        "authuser",  # (resp=QWORD name=STRING) > 414:access denied  # Looks like "passwd" is another param maybe for an older XDK?
         # "boxid",  # Can only be executed if security is enabled.
-        "break",
+        "break",  # now, start, clearall, clear, addr, read, write, execute, size
         "bye",
-        "capcontrol",
+        "capctrl", # () > 400
         "continue",
         "crashdump",
         "d3dopcode",
@@ -171,6 +171,9 @@ class _ProcessedCommand(RDCPCommand):
             return self._processed_response_handler(unpacked)
 
         super().__init__(command, response_handler=process_response, **kw)
+        self._processed_response_handler = handler
+
+    def set_handler(self, handler):
         self._processed_response_handler = handler
 
 

@@ -8,6 +8,103 @@ from gdbxbdmbridge import rdcp_response
 logger = logging.getLogger(__name__)
 
 
+TEST_COMMANDS = [
+    "adminpw",
+    #"altaddr",  #  addr=0x0a000210
+    "authuser",
+    # "boxid",  # Can only be executed if security is enabled.
+    "break",
+    #"bye",
+    "capcontrol",
+    "continue",
+    "crashdump",
+    "d3dopcode",
+    "dbgname",
+    "dbgoptions",
+    "debugger",
+    "debugmode",
+    "dedicate",
+    "deftitle",
+    "delete",
+    "dirlist",
+    "dmversion",
+    "drivefreespace",
+    "drivelist",
+    "dvdblk",
+    "dvdperf",
+    "fileeof",
+    "flash",
+    "fmtfat",
+    "funccall",
+    "getcontext",
+    "getd3dstate",
+    "getextcontext",
+    "getfile",
+    "getfileattributes",
+    "getgamma",
+    "getmem",
+    "getmem2",
+    "getpalette",
+    "getpid",
+    "getsum",
+    "getsurf",
+    "getuserpriv",
+    "getutildrvinfo",
+    "go",
+    "gpucount",
+    "halt",
+    "irtsweep",
+    "isbreak",
+    "isdebugger",
+    "isstopped",
+    "kd",
+    "keyxchg",
+    "lockmode",
+    "lop",
+    "magicboot",
+    "memtrack",
+    "mkdir",
+    "mmglobal",
+    "modlong",
+    "modsections",
+    "modules",
+    "nostopon",
+    "notify",
+    "notifyat",
+    "pbsnap",
+    "pclist",
+    "pdbinfo",
+    "pssnap",
+    "querypc",
+    "reboot",
+    "rename",
+    "resume",
+    "screenshot",
+    "sendfile",
+    "servname",
+    "setconfig",
+    "setcontext",
+    "setfileattributes",
+    "setsystime",
+    "setuserpriv",
+    "signcontent",
+    "stop",
+    "stopon",
+    "suspend",
+    "sysfileupd",
+    "systime",  # high=0x1d7c3df low=0xb7852a80
+    "threadinfo",
+    "threads",
+    "title",
+    "user",
+    "userlist",
+    "vssnap",
+    "walkmem",
+    "writefile",
+    "xbeinfo",
+    "xtlinfo",
+]
+
 class XBDMDialog(wx.Dialog):
     """Dialog providing tools for interacting with an XBOX devkit."""
 
@@ -40,9 +137,7 @@ class XBDMDialog(wx.Dialog):
         self._wait_text.Destroy()
         self._wait_text = None
 
-        self._input = wx.ComboBox(
-            self._panel, choices=sorted(list(rdcp_command.RDCPCommand.COMMANDS))
-        )
+        self._input = wx.ComboBox(self._panel, choices=TEST_COMMANDS)
         self._go = wx.Button(self._panel, label="Send")
         self._go.Bind(wx.EVT_BUTTON, self._on_send)
 
@@ -51,18 +146,28 @@ class XBDMDialog(wx.Dialog):
 
         self._box.Layout()
 
-        cmd = rdcp_command.AltAddr(handler=lambda r: print(r))
-        self._bridge.send_rdcp_command(cmd)
+        # self._loop_command = rdcp_command.AltAddr()
+        #
+        # def loop(r):
+        #     print(r)
+        #     self._bridge.send_rdcp_command(self._loop_command)
+        # self._loop_command.set_handler(loop)
+        # self._bridge.send_rdcp_command(self._loop_command)
 
+        # cmd = rdcp_command.AltAddr(handler=lambda r: print(r))
         # cmd = rdcp_command.DriveList(handler=self._on_drive_list)
         # self._bridge.send_rdcp_command(cmd)
+
+        cmd = rdcp_command.RDCPCommand("capctrla", response_handler=print)
+        # cmd.body = b" resp=0q1 name=\"test with\""
+        self._bridge.send_rdcp_command(cmd)
 
     def _on_send(self, evt):
         index = self._input.GetSelection()
         if index < 0:
             return
 
-        command = sorted(list(rdcp_command.RDCPCommand.COMMANDS))[index]
+        command = TEST_COMMANDS[index]
 
         cmd = rdcp_command.RDCPCommand(
             command, response_handler=self._on_command_response
