@@ -990,6 +990,34 @@ class GetUserPrivileges(_ProcessedCommand):
             self.body = bytes(f' name="{username}"', "utf-8")
 
 
+class GetUtilityDriveInfo(_ProcessedCommand):
+    """Gets information about the mounted utility partitions."""
+
+    class Response(_ProcessedResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            self.partitions = {}
+
+            if not self.ok:
+                return
+
+            entries = response.parse_data_map()
+            self.partitions = {
+                key.decode("utf-8"): rdcp_response.get_int_property(entries, key)
+                for key in entries.keys()
+            }
+
+        @property
+        def _body_str(self) -> str:
+            return f"partitions: {self.partitions}"
+
+    def __init__(self, handler=None):
+        super().__init__(
+            "getutildrvinfo", response_class=self.Response, handler=handler
+        )
+
+
 class Go(_ProcessedCommand):
     """Resumes execution of all threads."""
 

@@ -184,7 +184,7 @@ class XBDMDialog(wx.Dialog):
         # cmd = rdcp_command.XBEInfo("e:\\Tools\\boxplorer\\default.xbe", handler=print)
         # self._bridge.send_rdcp_command(cmd)
 
-        cmd = rdcp_command.GetUserPrivileges(handler=print)
+        cmd = rdcp_command.GetUtilityDriveInfo(handler=print)
         self._bridge.send_rdcp_command(cmd)
 
         # cmd = rdcp_command.GetMemBinary(0xB0011360, 128, handler=print)
