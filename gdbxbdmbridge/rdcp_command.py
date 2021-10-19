@@ -1969,6 +1969,17 @@ class Threads(_ProcessedCommand):
 #         # cmdline
 
 
+class UserList(_ProcessedCommand):
+    """Retrieves the registered users (must be locked)."""
+
+    class Response(_ProcessedRawBodyResponse):
+        # TODO: Handle response.
+        pass
+
+    def __init__(self, handler=None):
+        super().__init__("userlist", response_class=self.Response, handler=handler)
+
+
 class XBEInfo(_ProcessedCommand):
     """Retrieves info about an XBE."""
 
@@ -2004,6 +2015,23 @@ class XBEInfo(_ProcessedCommand):
         else:
             on_disk_only = " ondiskonly" if on_disk_only else ""
             self.body = bytes(f' name="{name}"{on_disk_only}', "utf-8")
+
+
+class VSSnap(_ProcessedCommand):
+    """Takes a D3D snapshot (binary must be compiled as debug)."""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(
+        self, first: int, last: int, flags: int = 0, marker: int = 0, handler=None
+    ):
+        super().__init__("vssnap", response_class=self.Response, handler=handler)
+        self.body = bytes(" first=0x%X last=0x%X" % (first, last), "utf-8")
+        if flags:
+            self.body += b" flags=0x%X" % flags
+        if marker:
+            self.body += b" marker=0x%X" % marker
 
 
 class XTLInfo(_ProcessedCommand):
