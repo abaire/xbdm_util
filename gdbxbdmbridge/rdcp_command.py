@@ -948,6 +948,17 @@ class GetChecksum(_ProcessedCommand):
         self._binary_response_length = 384 // blocksize
 
 
+class GetSurface(_ProcessedCommand):
+    """???"""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(self, surface_id: int, handler=None):
+        super().__init__("getsurf", response_class=self.Response, handler=handler)
+        self.body = bytes(f" id=0x%X" % surface_id, "utf-8")
+
+
 class Go(_ProcessedCommand):
     """Resumes execution of all threads."""
 
