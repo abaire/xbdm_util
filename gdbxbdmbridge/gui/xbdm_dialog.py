@@ -184,11 +184,17 @@ class XBDMDialog(wx.Dialog):
         # cmd = rdcp_command.XBEInfo("e:\\Tools\\boxplorer\\default.xbe", handler=print)
         # self._bridge.send_rdcp_command(cmd)
 
-        cmd = rdcp_command.GetMem(0xB0011360, 128, handler=print)
+        cmd = rdcp_command.Stop(handler=print)
         self._bridge.send_rdcp_command(cmd)
 
-        cmd = rdcp_command.GetMemBinary(0xB0011360, 128, handler=print)
+        cmd = rdcp_command.FuncCall(88, handler=print)
         self._bridge.send_rdcp_command(cmd)
+
+        cmd = rdcp_command.Go(handler=print)
+        self._bridge.send_rdcp_command(cmd)
+
+        # cmd = rdcp_command.GetMemBinary(0xB0011360, 128, handler=print)
+        # self._bridge.send_rdcp_command(cmd)
 
     def _on_send(self, evt):
         index = self._input.GetSelection()

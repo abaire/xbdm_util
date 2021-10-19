@@ -558,10 +558,21 @@ class DriveList(_ProcessedCommand):
 
         @property
         def _body_str(self) -> str:
-            return {self.drives}
+            return f"{self.drives}"
 
     def __init__(self, handler=None):
         super().__init__("drivelist", response_class=self.Response, handler=handler)
+
+
+class FuncCall(_ProcessedCommand):
+    """??? thread must be stopped, just returns OK"""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(self, thread_id, handler=None):
+        super().__init__("funccall", response_class=self.Response, handler=handler)
+        self.body = bytes(f" thread={thread_id}", "utf-8")
 
 
 class GetContext(_ProcessedCommand):
