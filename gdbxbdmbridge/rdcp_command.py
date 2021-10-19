@@ -637,6 +637,16 @@ class IsBreak(_ProcessedCommand):
         self.body = bytes(f" addr={addr_str}", "utf-8")
 
 
+class IsDebugger(_ProcessedCommand):
+    """Checks to see if the debugger is allowed to attach?"""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(self, handler=None):
+        super().__init__("isdebugger", response_class=self.Response, handler=handler)
+
+
 class Resume(_ProcessedCommand):
     """Resumes execution of the given thread."""
 
