@@ -184,9 +184,6 @@ class XBDMDialog(wx.Dialog):
         # cmd = rdcp_command.XBEInfo("e:\\Tools\\boxplorer\\default.xbe", handler=print)
         # self._bridge.send_rdcp_command(cmd)
 
-        cmd = rdcp_command.IsDebugger(handler=print)
-        self._bridge.send_rdcp_command(cmd)
-
     def _on_send(self, evt):
         index = self._input.GetSelection()
         if index < 0:

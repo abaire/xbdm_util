@@ -647,6 +647,34 @@ class IsDebugger(_ProcessedCommand):
         super().__init__("isdebugger", response_class=self.Response, handler=handler)
 
 
+class IsStopped(_ProcessedCommand):
+    """Checks to see if the given thread is stopped."""
+
+    class Response(_ProcessedRawBodyResponse):
+        # TODO: Process the reason for the stoppage.
+        pass
+
+    def __init__(self, thread_id, handler=None):
+        super().__init__("isstopped", response_class=self.Response, handler=handler)
+        self.body = bytes(f" thread={thread_id}", "utf-8")
+
+
+class QueryPerformanceCounter(_ProcessedCommand):
+    """Retrieves performance counter information."""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(self, name, counter_type=None, handler=None):
+        super().__init__("querypc", response_class=self.Response, handler=handler)
+        if counter_type:
+            counter_type = f" type={counter_type}"
+        else:
+            counter_type = ""
+
+        self.body = bytes(f' name="{name}"{counter_type}', "utf-8")
+
+
 class Resume(_ProcessedCommand):
     """Resumes execution of the given thread."""
 
