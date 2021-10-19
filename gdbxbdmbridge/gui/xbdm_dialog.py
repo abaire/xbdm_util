@@ -1,5 +1,6 @@
 import logging
 import wx
+from wx.lib import newevent
 
 from gdbxbdmbridge import bridge
 from gdbxbdmbridge import rdcp_command
@@ -10,12 +11,12 @@ logger = logging.getLogger(__name__)
 
 TEST_COMMANDS = [
     "adminpw",
-    #"altaddr",  #  addr=0x0a000210
+    # "altaddr",  #  addr=0x0a000210
     "authuser",
     # "boxid",  # Can only be executed if security is enabled.
     "break",
-    #"bye",
-    "capcontrol",
+    # "bye",
+    "capctrl",
     "continue",
     "crashdump",
     "d3dopcode",
@@ -105,8 +106,11 @@ TEST_COMMANDS = [
     "xtlinfo",
 ]
 
+
 class XBDMDialog(wx.Dialog):
     """Dialog providing tools for interacting with an XBOX devkit."""
+
+    ConnectedEvent, EVT_CONNECTED = newevent.NewEvent()
 
     def __init__(self, parent, xbox_bridge: bridge.GDBXBDMBridge, *args, **kw):
         super().__init__(parent, *args, title=xbox_bridge.xbox_info, **kw)
@@ -116,19 +120,25 @@ class XBDMDialog(wx.Dialog):
         self._panel.SetSizer(self._box)
 
         self._bridge = xbox_bridge
+        self.Bind(self.EVT_CONNECTED, self._on_connected)
 
         if not self._bridge.can_process_xbdm_commands:
             self._wait_text = wx.StaticText(
                 self._panel, label=f"Connecting to {xbox_bridge.xbox_info}"
             )
             self._box.Add(self._wait_text, 1, wx.ALL, border=20)
-            self._bridge.connect_xbdm_async(self._on_connected)
+            self._bridge.connect_xbdm_async(
+                lambda success: wx.PostEvent(
+                    self, self.ConnectedEvent(id=wx.ID_ANY, success=success)
+                )
+            )
             return
 
         self._wait_text = None
-        self._on_connected(True)
+        wx.PostEvent(self, self.ConnectedEvent(id=wx.ID_ANY, success=True))
 
-    def _on_connected(self, success: bool):
+    def _on_connected(self, evt):
+        success = evt.success
         if not success:
             self._wait_text.SetLabel(f"Failed to connect to {self._bridge.xbox_info}")
             return
@@ -158,8 +168,11 @@ class XBDMDialog(wx.Dialog):
         # cmd = rdcp_command.DriveList(handler=self._on_drive_list)
         # self._bridge.send_rdcp_command(cmd)
 
-        cmd = rdcp_command.RDCPCommand("capctrla", response_handler=print)
+        # cmd = rdcp_command.RDCPCommand("capctrla", response_handler=print)
         # cmd.body = b" resp=0q1 name=\"test with\""
+
+        # cmd = rdcp_command.Dbgname(new_name="test_name", handler=print)
+        cmd = rdcp_command.DbgnameGet(handler=print)
         self._bridge.send_rdcp_command(cmd)
 
     def _on_send(self, evt):

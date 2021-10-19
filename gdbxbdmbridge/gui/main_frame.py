@@ -1,10 +1,10 @@
 import wx
 import wx.grid
-import wx.lib.newevent
+from wx.lib import newevent
 
 from gdbxbdmbridge import bridge_info
 
-LaunchXBDMBrowserEvent, EVT_LAUNCH_XBDM_BROWSER = wx.lib.newevent.NewCommandEvent()
+LaunchXBDMBrowserEvent, EVT_LAUNCH_XBDM_BROWSER = newevent.NewCommandEvent()
 
 
 class MainFrame(wx.Frame):
