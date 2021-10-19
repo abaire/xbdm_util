@@ -3,6 +3,7 @@ import binascii
 import ipaddress
 import logging
 from typing import Callable
+from typing import Optional
 
 from . import rdcp_response
 
@@ -957,6 +958,36 @@ class GetSurface(_ProcessedCommand):
     def __init__(self, surface_id: int, handler=None):
         super().__init__("getsurf", response_class=self.Response, handler=handler)
         self.body = bytes(f" id=0x%X" % surface_id, "utf-8")
+
+
+class GetUserPrivileges(_ProcessedCommand):
+    """Gets the privilege flags for a user."""
+
+    class Response(_ProcessedResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            self.flags = {}
+
+            if not self.ok:
+                return
+
+            entries = response.parse_data_map()
+            self.flags = {
+                key.decode("utf-8"): rdcp_response.get_bool_property(entries, key)
+                for key in entries.keys()
+            }
+
+        @property
+        def _body_str(self) -> str:
+            return f"flags: {self.flags}"
+
+    def __init__(self, username: Optional[str] = None, handler=None):
+        super().__init__("getuserpriv", response_class=self.Response, handler=handler)
+        if not username:
+            self.body = bytes(" me", "utf-8")
+        else:
+            self.body = bytes(f' name="{username}"', "utf-8")
 
 
 class Go(_ProcessedCommand):
