@@ -659,10 +659,60 @@ class IsStopped(_ProcessedCommand):
         self.body = bytes(f" thread={thread_id}", "utf-8")
 
 
+class ModSections(_ProcessedCommand):
+    """Returns the currently running executable modules."""
+
+    class Response(_ProcessedResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            self.sections = []
+
+            if not self.ok:
+                return
+
+            known_keys = {
+                b"name": ("name", rdcp_response.get_utf_property),
+                b"base": ("base_address", rdcp_response.get_int_property),
+                b"size": ("size", rdcp_response.get_int_property),
+                b"index": ("index", rdcp_response.get_int_property),
+                b"flags": ("flags", rdcp_response.get_int_property),
+            }
+
+            entries = response.parse_data_map_array()
+            for entry in entries:
+                module_info = {
+                    new_key: mapper(entry, key)
+                    for key, (new_key, mapper) in known_keys.items()
+                }
+
+                # Treat any unknown values as boolean flags.
+                for key, value in entry.items():
+                    if key in known_keys:
+                        continue
+                    module_info[key.decode("utf-8")] = rdcp_response.get_bool_property(
+                        entry, key
+                    )
+
+                self.sections.append(module_info)
+
+        @property
+        def ok(self):
+            return self._status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+
+        @property
+        def _body_str(self) -> str:
+            return f"{self.sections}"
+
+    def __init__(self, name, handler=None):
+        super().__init__("modsections", response_class=self.Response, handler=handler)
+        self.body = bytes(f' name="{name}"', "utf-8")
+
+
 class Modules(_ProcessedCommand):
     """Returns the currently running executable modules."""
 
-    class Response(_ProcessedRawBodyResponse):
+    class Response(_ProcessedResponse):
         def __init__(self, response: rdcp_response.RDCPResponse):
             super().__init__(response)
 
