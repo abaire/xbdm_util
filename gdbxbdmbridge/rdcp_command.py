@@ -591,6 +591,20 @@ class GetContext(_ProcessedCommand):
         self.body = bytes(f" thread={thread_id_str}{flags}", "utf-8")
 
 
+class Suspend(_ProcessedCommand):
+    """Suspends the given thread."""
+
+    class Response(_ProcessedResponse):
+        pass
+
+    def __init__(self, thread_id, handler=None):
+        super().__init__("suspend", response_class=self.Response, handler=handler)
+        self.body = bytes(f" thread={thread_id}", "utf-8")
+
+
+# sysfileupd - Looks like this may be invoking a system update?
+
+
 class Systime(_ProcessedCommand):
     """Retrieves the system time."""
 
