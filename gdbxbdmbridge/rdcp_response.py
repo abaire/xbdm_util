@@ -17,6 +17,17 @@ def get_int_property(property_map: {bytes: bytes}, key: bytes, default=0) -> int
     return int(get_utf_property(property_map, key, bytes(f"{default}", "utf-8")), 16)
 
 
+def get_qword_property(
+    property_map: {bytes: bytes}, key_low: bytes, key_high: bytes, default=0
+) -> int:
+    """Returns the combination of the given keys as a 64-bit integer."""
+
+    low = get_int_property(property_map, key_low, default & 0xFFFFFFFF)
+    high = get_int_property(property_map, key_high, (default >> 32) & 0xFFFFFFFF)
+
+    return low + (high << 32)
+
+
 def get_bool_property(property_map: {bytes: bytes}, key: bytes, default=False) -> bool:
     """Returns the value of the given key as a bool."""
     return get_int_property(property_map, key, 1 if default else 0) != 0

@@ -510,23 +510,16 @@ class DriveFreeSpace(_ProcessedCommand):
                 return
 
             entries = response.parse_data_map()
-            self.free_to_caller = rdcp_response.get_int_property(
-                entries, b"freetocallerlo"
-            )
-            self.free_to_caller += (
-                rdcp_response.get_int_property(entries, b"freetocallerhi") << 32
+            self.free_to_caller = rdcp_response.get_qword_property(
+                entries, b"freetocallerlo", b"freetocallerhi"
             )
 
-            self.total_bytes = rdcp_response.get_int_property(entries, b"totalbyteslo")
-            self.total_bytes += (
-                rdcp_response.get_int_property(entries, b"totalbyteshi") << 32
+            self.total_bytes = rdcp_response.get_qword_property(
+                entries, b"totalbyteslo", b"totalbyteshi"
             )
 
-            self.total_free_bytes = rdcp_response.get_int_property(
-                entries, b"totalfreebyteslo"
-            )
-            self.total_free_bytes += (
-                rdcp_response.get_int_property(entries, b"totalfreebyteshi") << 32
+            self.total_free_bytes = rdcp_response.get_qword_property(
+                entries, b"totalfreebyteslo", b"totalfreebyteshi"
             )
 
         @property
@@ -597,10 +590,51 @@ class GetContext(_ProcessedCommand):
         self.body = bytes(f" thread={thread_id_str}{flags}", "utf-8")
 
 
+class ThreadInfo(_ProcessedCommand):
+    """Gets information about a specific thread."""
+
+    class Response(_ProcessedResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            if not self.ok:
+                self.suspend = None
+                self.priority = None
+                self.tlsbase = None
+                self.start = None
+                self.base = None
+                self.limit = None
+                self.create = None
+                return
+
+            entries = response.parse_data_map()
+            self.suspend = rdcp_response.get_bool_property(entries, b"suspend")
+            self.priority = rdcp_response.get_int_property(entries, b"priority")
+            self.tlsbase = rdcp_response.get_int_property(entries, b"tlsbase")
+            self.start = rdcp_response.get_int_property(entries, b"start")
+            self.base = rdcp_response.get_int_property(entries, b"base")
+            self.limit = rdcp_response.get_int_property(entries, b"limit")
+            self.create = rdcp_response.get_qword_property(
+                entries, b"createlo", b"createhi"
+            )
+
+        @property
+        def ok(self):
+            return self._status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+
+        @property
+        def _body_str(self) -> str:
+            return f" suspend={self.suspend} priority={self.priority} tlsbase={self.tlsbase} start={self.start} base={self.base} limit={self.limit} create={self.create}"
+
+    def __init__(self, thread_id, handler=None):
+        super().__init__("threadinfo", response_class=self.Response, handler=handler)
+        self.body = bytes(f" thread={thread_id}", "utf-8")
+
+
 class Threads(_ProcessedCommand):
     """Gets the list of active threads."""
 
-    class Response(_ProcessedRawBodyResponse):
+    class Response(_ProcessedResponse):
         def __init__(self, response: rdcp_response.RDCPResponse):
             super().__init__(response)
             lines = response.parse_multiline()
@@ -608,7 +642,7 @@ class Threads(_ProcessedCommand):
 
         @property
         def _body_str(self) -> str:
-            return self.thread_ids
+            return str(self.thread_ids)
 
     def __init__(self, handler=None):
         super().__init__("threads", response_class=self.Response, handler=handler)
