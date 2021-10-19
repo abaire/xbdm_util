@@ -565,7 +565,7 @@ class DriveList(_ProcessedCommand):
 
 
 class Dedicate(_ProcessedCommand):
-    """Sets connection as dedicated"""
+    """Sets connection as dedicated."""
 
     class Response(_ProcessedRawBodyResponse):
         pass
@@ -576,6 +576,22 @@ class Dedicate(_ProcessedCommand):
             self.body = b" global"
         elif handler_name:
             self.body = bytes(f' handler="{handler_name}"', "utf-8")
+
+
+class Delete(_ProcessedCommand):
+    """Deletes a file."""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(self, path, is_directory=False, handler=None):
+        super().__init__("delete", response_class=self.Response, handler=handler)
+        if is_directory:
+            dir_flag = " dir"
+        else:
+            dir_flag = ""
+
+        self.body = bytes(f' name="{path}"{dir_flag}', "utf-8")
 
 
 class FuncCall(_ProcessedCommand):
