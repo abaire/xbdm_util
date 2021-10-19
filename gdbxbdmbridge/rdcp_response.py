@@ -9,7 +9,10 @@ def get_utf_property(property_map: {bytes: bytes}, key: bytes, default=None) -> 
     val = property_map.get(key, default)
     if not val:
         return ""
-    return val.decode("utf-8")
+    ret = val.decode("utf-8")
+    if ret[0] == '"':
+        ret = ret[1:-1]
+    return ret
 
 
 def get_int_property(property_map: {bytes: bytes}, key: bytes, default=0) -> int:
@@ -115,8 +118,10 @@ class RDCPResponse:
         if not self.data:
             return {}
 
+        buffer = self.data.replace(self.TERMINATOR, b" ").strip()
+
         ret = {}
-        items = self.data.split(b" ")
+        items = buffer.split(b" ")
         for item in items:
             key, value = item.split(b"=")
             ret[bytes(key)] = bytes(value)
