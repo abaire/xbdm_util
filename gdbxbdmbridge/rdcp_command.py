@@ -591,6 +591,37 @@ class GetContext(_ProcessedCommand):
         self.body = bytes(f" thread={thread_id_str}{flags}", "utf-8")
 
 
+class StopOn(_ProcessedCommand):
+    """Sets the events that will break into the debugger."""
+
+    ALL = 0xFFFFFFFF
+    CREATETHREAD = 0x01
+    FCE = 0x02
+    DEBUGSTR = 0x04
+    STACKTRACE = 0x08
+
+    class Response(_ProcessedResponse):
+        pass
+
+    def __init__(self, events: int = 0xFFFFFFFF, handler=None):
+        super().__init__("stopon", response_class=self.Response, handler=handler)
+        if events == self.ALL:
+            self.body = bytes(f" all", "utf-8")
+            return
+
+        flags = []
+        if events & self.CREATETHREAD:
+            flags.append("createthread")
+        if events & self.FCE:
+            flags.append("fce")
+        if events & self.DEBUGSTR:
+            flags.append("debugstr")
+        if events & self.STACKTRACE:
+            flags.append("stacktrace")
+        flags = " ".join(flags)
+        self.body = bytes(f" {flags}", "utf-8")
+
+
 class Suspend(_ProcessedCommand):
     """Suspends the given thread."""
 

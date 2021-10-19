@@ -184,7 +184,7 @@ class XBDMDialog(wx.Dialog):
         # cmd = rdcp_command.XBEInfo("e:\\Tools\\boxplorer\\default.xbe", handler=print)
         # self._bridge.send_rdcp_command(cmd)
 
-        cmd = rdcp_command.Systime(handler=print)
+        cmd = rdcp_command.StopOn(handler=print)
         self._bridge.send_rdcp_command(cmd)
 
     def _on_send(self, evt):
