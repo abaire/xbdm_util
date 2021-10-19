@@ -172,7 +172,7 @@ class XBDMDialog(wx.Dialog):
         # cmd.body = b" resp=0q1 name=\"test with\""
 
         # cmd = rdcp_command.Dbgname(new_name="test_name", handler=print)
-        cmd = rdcp_command.Debugger(False, handler=print)
+        cmd = rdcp_command.DirList("S:\\*", handler=print)
         self._bridge.send_rdcp_command(cmd)
 
     def _on_send(self, evt):

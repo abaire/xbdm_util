@@ -446,7 +446,26 @@ class Debugger(_ProcessedCommand):
     def __init__(self, connect=True, handler=None):
         super().__init__("debugger", response_class=self.Response, handler=handler)
         cmd = "connect" if connect else "disconnect"
-        self.body = bytes(f' {cmd}"', "utf-8")
+        self.body = bytes(f" {cmd}", "utf-8")
+
+
+class DebugMode(_ProcessedCommand):
+    """?Enables debugmode flags?."""
+
+    class Response(_ProcessedResponse):
+        pass
+
+    def __init__(self, connect=True, handler=None):
+        super().__init__("debugmode", response_class=self.Response, handler=handler)
+
+
+class DirList(_ProcessedCommand):
+    class Response(_ProcessedResponse):
+        pass
+
+    def __init__(self, name, handler=None):
+        super().__init__("dirlist", response_class=self.Response, handler=handler)
+        self.body = bytes(f' name="name"', "utf-8")
 
 
 class DriveList(_ProcessedCommand):
