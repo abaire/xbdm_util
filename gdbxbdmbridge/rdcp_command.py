@@ -748,7 +748,7 @@ class GetFile(_ProcessedCommand):
 class GetFileAttributes(_ProcessedCommand):
     """Retrieves attributes of a file."""
 
-    class Response(_ProcessedRawBodyResponse):
+    class Response(_ProcessedResponse):
         def __init__(self, response: rdcp_response.RDCPResponse):
             super().__init__(response)
 
@@ -782,6 +782,36 @@ class GetFileAttributes(_ProcessedCommand):
             "getfileattributes", response_class=self.Response, handler=handler
         )
         self.body = bytes(f' name="{name}"', "utf-8")
+
+
+class GetGamma(_ProcessedCommand):
+    """Retrieves gamma information."""
+
+    class Response(_ProcessedResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            self.printable_data = ""
+            self.data = bytes()
+
+            if not self.ok:
+                return
+
+            self.data = response.data
+            # TODO: Consider dropping printable_data.
+            self.printable_data = binascii.hexlify(self.data)
+
+        @property
+        def ok(self):
+            return self._status == rdcp_response.RDCPResponse.STATUS_BINARY_RESPONSE
+
+        @property
+        def _body_str(self) -> str:
+            return f"{self.printable_data}"
+
+    def __init__(self, handler=None):
+        super().__init__("getgamma", response_class=self.Response, handler=handler)
+        self._binary_response_length = 768
 
 
 class GetMem(_ProcessedCommand):
