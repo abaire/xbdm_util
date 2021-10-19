@@ -203,6 +203,16 @@ class _ProcessedResponse:
         return ret
 
 
+class _ProcessedRawBodyResponse(_ProcessedResponse):
+    def __init__(self, response: rdcp_response.RDCPResponse):
+        super().__init__(response)
+        self._body = response.data
+
+    @property
+    def _body_str(self) -> str:
+        return self._body.decode("utf-8")
+
+
 class AltAddr(_ProcessedCommand):
     """Returns the Game Configuration IP."""
 
@@ -318,6 +328,20 @@ class Bye(_ProcessedCommand):
         super().__init__("bye", response_class=self.Response, handler=handler)
 
 
+# class Capcontrol(_ProcessedCommand):
+#     """??."""
+#
+#     class Response(_ProcessedResponse):
+#         pass
+#
+#     def __init__(self, handler=None):
+#         super().__init__("continue", response_class=self.Response, handler=handler)
+#         # params: start (name buffersize) | fastcapenabled | stop
+#         thread_id_string = "0x%X" % thread_id
+#         exception_string = " exception" if exception else ""
+#         self.body = bytes(f" thread={thread_id_string}{exception_string}")
+
+
 class Continue(_ProcessedCommand):
     """Continues execution of the given thread."""
 
@@ -330,6 +354,51 @@ class Continue(_ProcessedCommand):
         thread_id_string = "0x%X" % thread_id
         exception_string = " exception" if exception else ""
         self.body = bytes(f" thread={thread_id_string}{exception_string}")
+
+
+# class Crashdump(_ProcessedCommand):
+#     """???."""
+#
+#     class Response(_ProcessedResponse):
+#         pass
+#
+#     def __init__(self, handler=None):
+#         super().__init__("crashdump", response_class=self.Response, handler=handler)
+
+
+class DbgnameGet(_ProcessedCommand):
+    """Gets the XBOX devkit name."""
+
+    class Response(_ProcessedResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            if not self.ok:
+                self.name = None
+                return
+
+            self.name = response.data.decode("utf-8")
+            if self.name.startswith('"'):
+                self.name = self.name[1:-1]
+
+        @property
+        def _body_str(self) -> str:
+            return f" {self.name}"
+
+    def __init__(self, handler=None):
+        super().__init__("dbgname", response_class=self.Response, handler=handler)
+
+
+class DbgnameSet(_ProcessedCommand):
+    """Sets the XBOX devkit name."""
+
+    class Response(_ProcessedResponse):
+        pass
+
+    def __init__(self, new_name, handler=None):
+        super().__init__("dbgname", response_class=self.Response, handler=handler)
+        if new_name:
+            self.body = bytes(f' name="{new_name}"', "utf-8")
 
 
 class DriveList(_ProcessedCommand):
