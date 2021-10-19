@@ -2034,6 +2034,53 @@ class VSSnap(_ProcessedCommand):
             self.body += b" marker=0x%X" % marker
 
 
+class WalkMem(_ProcessedCommand):
+    """Returns a list of valid virtual memory regions."""
+
+    class Response(_ProcessedResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            self.regions = []
+
+            if not self.ok:
+                return
+
+            known_keys = {
+                b"base": ("base_address", rdcp_response.get_int_property),
+                b"size": ("size", rdcp_response.get_int_property),
+                b"protect": ("protection_flags", rdcp_response.get_int_property),
+            }
+
+            entries = response.parse_data_map_array()
+            for entry in entries:
+                module_info = {
+                    new_key: mapper(entry, key)
+                    for key, (new_key, mapper) in known_keys.items()
+                }
+
+                # Treat any unknown values as boolean flags.
+                for key, value in entry.items():
+                    if key in known_keys:
+                        continue
+                    module_info[key.decode("utf-8")] = rdcp_response.get_bool_property(
+                        entry, key
+                    )
+
+                self.regions.append(module_info)
+
+        @property
+        def ok(self):
+            return self._status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+
+        @property
+        def _body_str(self) -> str:
+            return f"{self.regions}"
+
+    def __init__(self, handler=None):
+        super().__init__("walkmem", response_class=self.Response, handler=handler)
+
+
 class XTLInfo(_ProcessedCommand):
     """Retrieves last error info."""
 
