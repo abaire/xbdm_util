@@ -1,6 +1,7 @@
 import logging
 import socket
 from typing import Optional
+from typing import Union
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,7 @@ class IPTransport:
         self._sock = None
         self.addr = None
 
-    def send(self, buffer):
+    def send(self, buffer: Union[bytes, bytearray]):
         self._write_buffer.extend(buffer)
 
     def process(

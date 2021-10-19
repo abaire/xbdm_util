@@ -49,29 +49,38 @@ class XBDMTransport(ip_transport.IPTransport):
     def _process_xbdm_data(self, transport: ip_transport.IPTransport):
         response = rdcp_response.RDCPResponse()
 
-        binary_response_length = response.BINARY_NO_BINARY_ALLOWED
-        if self._command_queue:
-            binary_response_length = self._command_queue[
-                0
-            ].expected_binary_response_length
+        def parse_response():
+            current_command = None
+            if self._command_queue:
+                current_command = self._command_queue[0]
 
-        bytes_procesed = response.parse(transport.read_buffer, binary_response_length)
-        while bytes_procesed > 0:
+            if not current_command:
+                binary_response_length = response.BINARY_NO_BINARY_ALLOWED
+            else:
+                binary_response_length = current_command.expected_binary_response_length
+
+            bytes_procesed = response.parse(
+                transport.read_buffer, binary_response_length
+            )
+            return current_command, bytes_procesed
+
+        current_command, bytes_processed = parse_response()
+
+        while bytes_processed > 0:
+
+            # If the response expects binary data, insert a new RDCPBinaryPayload instance for the command just after the current command.
+            if response.status == response.STATUS_SEND_BINARY_DATA:
+                payload = rdcp_command.RDCPBinaryPayload(current_command)
+                self._command_queue.insert(1, payload)
+
             if self._process_rdcp_command(response):
                 logger.warning(
                     f"!!! Close requested when processing response {response}"
                 )
                 break
-            transport.shift_read_buffer(bytes_procesed)
+            transport.shift_read_buffer(bytes_processed)
 
-            binary_response_length = response.BINARY_NO_BINARY_ALLOWED
-            if self._command_queue:
-                binary_response_length = self._command_queue[
-                    0
-                ].expected_binary_response_length
-            bytes_procesed = response.parse(
-                transport.read_buffer, binary_response_length
-            )
+            current_command, bytes_processed = parse_response()
 
         logger.debug(
             f"After processing: [{len(transport.read_buffer)}] {transport.read_buffer}"

@@ -119,6 +119,7 @@ class RDCPCommand:
         self.body = body
         self._response_handler = response_handler
         self._binary_response_length = 0
+        self._binary_payload = None
 
         # if self.command not in self.COMMANDS:
         #     logger.error(f"Invalid command {command}")
@@ -161,8 +162,28 @@ class RDCPCommand:
 
     def process_response(self, response: rdcp_response.RDCPResponse) -> bool:
         if not self._response_handler:
-            return True
+            return False
         return self._response_handler(response)
+
+
+class RDCPBinaryPayload(RDCPCommand):
+    """Models a raw set of bytes."""
+
+    def __init__(self, original_command: RDCPCommand):
+        """Creates a new RDCPBinaryPayload instance from the given command, stealing its response_handler."""
+        super().__init__(
+            original_command.command + "-payload",
+            response_handler=original_command._response_handler,
+        )
+        original_command._response_handler = None
+        self.payload = original_command._binary_payload
+        assert self.payload
+
+    def __str__(self):
+        ret = f"{self.__class__.__name__}[{len(self.payload)}])"
+
+    def serialize(self) -> bytes:
+        return self.payload
 
 
 class _ProcessedCommand(RDCPCommand):
@@ -1130,9 +1151,9 @@ class KernelDebug(_ProcessedCommand):
 #     class Response(_ProcessedRawBodyResponse):
 #         pass
 #
-#     def __init__(self, handler=None):
+#     def __init__(self, keydata: bytes, handler=None):
 #         super().__init__("keyxchg", response_class=self.Response, handler=handler)
-#         # TODO: Need to immediately queue the key binary data as well.
+#         self._binary_payload = keydata
 
 
 class LOP(_ProcessedCommand):
@@ -1619,6 +1640,35 @@ class Screenshot(_ProcessedCommand):
 
     def __init__(self, handler=None):
         super().__init__("screenshot", response_class=self.Response, handler=handler)
+
+
+class SendFile(_ProcessedCommand):
+    """Uploads a file to the device."""
+
+    class Response(_ProcessedResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            self.printable_data = ""
+            self.data = bytes()
+
+            if not self.ok:
+                return
+
+            self.printable_data, self.data = response.parse_hex_data()
+
+        @property
+        def ok(self):
+            return self._status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+
+        @property
+        def _body_str(self) -> str:
+            return f"{self.printable_data}"
+
+    def __init__(self, name: str, content: bytes, handler=None):
+        super().__init__("sendfile", response_class=self.Response, handler=handler)
+        self.body = bytes(' name="%s" length=0x%X' % (name, len(content)), "utf-8")
+        self._binary_payload = content
 
 
 class Stop(_ProcessedCommand):

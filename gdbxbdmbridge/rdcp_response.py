@@ -98,6 +98,8 @@ class RDCPResponse:
     STATUS_CONNECTED = 201
     STATUS_MULTILINE_RESPONSE = 202
     STATUS_BINARY_RESPONSE = 203
+    STATUS_SEND_BINARY_DATA = 204
+    STATUS_CONNECTION_DEDICATED = 205
 
     STATUS_CODES = {
         0: "INVALID",
@@ -105,8 +107,8 @@ class RDCPResponse:
         STATUS_CONNECTED: "connected",
         STATUS_MULTILINE_RESPONSE: "multiline response follows",
         STATUS_BINARY_RESPONSE: "binary response follows",
-        204: "send binary data",
-        205: "connection dedicated",
+        STATUS_SEND_BINARY_DATA: "send binary data",
+        STATUS_CONNECTION_DEDICATED: "connection dedicated",
         400: "unexpected error",
         401: "max number of connections exceeded",
         402: "file not found",
