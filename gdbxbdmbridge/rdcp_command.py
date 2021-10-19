@@ -1422,6 +1422,16 @@ class NotifyAt(_ProcessedCommand):
         super().__init__("notifyat", response_class=self.Response, handler=handler)
 
 
+class PBSnap(_ProcessedCommand):
+    """Takes a D3D snapshot (binary must be compiled as debug or profile)."""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(self, handler=None):
+        super().__init__("pbsnap", response_class=self.Response, handler=handler)
+
+
 class _StopOnBase(_ProcessedCommand):
     """Base class for NoStopOn and StopOn"""
 
