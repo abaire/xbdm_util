@@ -1980,43 +1980,6 @@ class UserList(_ProcessedCommand):
         super().__init__("userlist", response_class=self.Response, handler=handler)
 
 
-class XBEInfo(_ProcessedCommand):
-    """Retrieves info about an XBE."""
-
-    class Response(_ProcessedResponse):
-        def __init__(self, response: rdcp_response.RDCPResponse):
-            super().__init__(response)
-
-            if not self.ok:
-                self.timestamp = None
-                self.checksum = None
-                self.name = None
-                return
-
-            entries = response.parse_data_map()
-            self.timestamp = rdcp_response.get_int_property(entries, b"timestamp")
-            self.checksum = rdcp_response.get_int_property(entries, b"checksum")
-            self.name = rdcp_response.get_utf_property(entries, b"name")
-
-        @property
-        def ok(self):
-            return self._status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
-
-        @property
-        def _body_str(self) -> str:
-            return (
-                f" name={self.name} timestamp={self.timestamp} checksum={self.checksum}"
-            )
-
-    def __init__(self, name=None, on_disk_only=None, handler=None):
-        super().__init__("xbeinfo", response_class=self.Response, handler=handler)
-        if not name:
-            self.body = bytes(f" running", "utf-8")
-        else:
-            on_disk_only = " ondiskonly" if on_disk_only else ""
-            self.body = bytes(f' name="{name}"{on_disk_only}', "utf-8")
-
-
 class VSSnap(_ProcessedCommand):
     """Takes a D3D snapshot (binary must be compiled as debug)."""
 
@@ -2110,6 +2073,43 @@ class WriteFile(_ProcessedCommand):
             ' name="%s" length=0x%X offset=0x%X' % (name, len(content), offset), "utf-8"
         )
         self._binary_payload = content
+
+
+class XBEInfo(_ProcessedCommand):
+    """Retrieves info about an XBE."""
+
+    class Response(_ProcessedResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            if not self.ok:
+                self.timestamp = None
+                self.checksum = None
+                self.name = None
+                return
+
+            entries = response.parse_data_map()
+            self.timestamp = rdcp_response.get_int_property(entries, b"timestamp")
+            self.checksum = rdcp_response.get_int_property(entries, b"checksum")
+            self.name = rdcp_response.get_utf_property(entries, b"name")
+
+        @property
+        def ok(self):
+            return self._status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+
+        @property
+        def _body_str(self) -> str:
+            return (
+                f" name={self.name} timestamp={self.timestamp} checksum={self.checksum}"
+            )
+
+    def __init__(self, name=None, on_disk_only=None, handler=None):
+        super().__init__("xbeinfo", response_class=self.Response, handler=handler)
+        if not name:
+            self.body = bytes(f" running", "utf-8")
+        else:
+            on_disk_only = " ondiskonly" if on_disk_only else ""
+            self.body = bytes(f' name="{name}"{on_disk_only}', "utf-8")
 
 
 class XTLInfo(_ProcessedCommand):
