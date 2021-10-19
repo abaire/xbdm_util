@@ -1158,6 +1158,28 @@ class LOP(_ProcessedCommand):
             self.body += bytes("0x%X" % command_data, "utf-8")
 
 
+class MagicBoot(_ProcessedCommand):
+    """Triggers a boot/reboot."""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(
+        self,
+        title: str,
+        enable_wait_for_debugger: bool = False,
+        enable_cold: bool = False,
+        handler=None,
+    ):
+        super().__init__("magicboot", response_class=self.Response, handler=handler)
+        flags = ""
+        if enable_wait_for_debugger:
+            flags += " debug"
+        if enable_cold:
+            flags += " cold"
+        self.body = bytes(f' title="{title}"{flags}', "utf-8")
+
+
 class MemoryMapGlobal(_ProcessedCommand):
     """Returns info about the global memory map."""
 
