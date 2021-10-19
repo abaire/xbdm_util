@@ -1,5 +1,5 @@
 """Provides utilities in support of Remote Debugging and Control Protocol."""
-import enum
+import binascii
 import ipaddress
 import logging
 from typing import Callable
@@ -116,6 +116,7 @@ class RDCPCommand:
         self.command = command.lower()
         self.body = body
         self._response_handler = response_handler
+        self._binary_response_length = 0
 
         # if self.command not in self.COMMANDS:
         #     logger.error(f"Invalid command {command}")
@@ -136,6 +137,12 @@ class RDCPCommand:
             ret += "'"
 
         return ret
+
+    @property
+    def expected_binary_response_length(self) -> int:
+        if self._binary_response_length:
+            return self._binary_response_length
+        return 0
 
     def serialize(self) -> bytes:
         if not self.command:
@@ -619,6 +626,40 @@ class GetMem(_ProcessedCommand):
         addr = "0x%X" % addr
         length = "0x%X" % length
         self.body = bytes(f" addr={addr} length={length}", "utf-8")
+
+
+class GetMemBinary(_ProcessedCommand):
+    """Gets the contents of a block of memory as a binary chunk."""
+
+    class Response(_ProcessedResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            self.printable_data = ""
+            self.data = bytes()
+
+            if not self.ok:
+                return
+
+            self.data = response.data
+            # TODO: Consider dropping printable_data.
+            # The only differentiation between getmem2 and getmem is that this method returns a binary, so converting it back to a hex string goes against the intent.
+            self.printable_data = binascii.hexlify(self.data)
+
+        @property
+        def ok(self):
+            return self._status == rdcp_response.RDCPResponse.STATUS_BINARY_RESPONSE
+
+        @property
+        def _body_str(self) -> str:
+            return f"{self.printable_data}"
+
+    def __init__(self, addr, length, handler=None):
+        super().__init__("getmem2", response_class=self.Response, handler=handler)
+        self._binary_response_length = length
+        addr = "0x%X" % addr
+        length = "0x%X" % length
+        self.body = bytes(f" ADDR={addr} LENGTH={length}", "utf-8")
 
 
 class Go(_ProcessedCommand):

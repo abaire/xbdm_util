@@ -171,7 +171,7 @@ class RDCPResponse:
         buffer = self.data.replace(self.TERMINATOR, b" ").strip()
         return parse_data_map(buffer)
 
-    def parse(self, buffer: bytes):
+    def parse(self, buffer: bytes, binary_response_length: int = -1):
         terminator = buffer.find(self.TERMINATOR)
         terminator_len = len(self.TERMINATOR)
         if terminator < 0:
@@ -194,7 +194,20 @@ class RDCPResponse:
             self.message = buffer[5 : body_start - terminator_len]
             terminator_len = len(self.MULTILINE_TERMINATOR)
         elif self.status == self.STATUS_BINARY_RESPONSE:
-            logger.error("TODO: IMPLEMENT BINARY RESPONSE PARSING")
+            if binary_response_length < 0:
+                logger.error(
+                    "Unexpectedly received binary response to a non-binary request"
+                )
+                assert (
+                    False
+                    and "Unexpectedly received binary response to a non-binary request"
+                )
+            body_start = terminator + terminator_len
+            if len(buffer) - body_start < binary_response_length:
+                return 0
+            self.message = buffer[5 : body_start - terminator_len]
+            self.data = buffer[body_start : body_start + binary_response_length]
+            terminator += binary_response_length
         else:
             self.data = buffer[5:terminator]
 

@@ -49,7 +49,13 @@ class XBDMTransport(ip_transport.IPTransport):
     def _process_xbdm_data(self, transport: ip_transport.IPTransport):
         response = rdcp_response.RDCPResponse()
 
-        bytes_procesed = response.parse(transport.read_buffer)
+        binary_response_length = 0
+        if self._command_queue:
+            binary_response_length = self._command_queue[
+                0
+            ].expected_binary_response_length
+
+        bytes_procesed = response.parse(transport.read_buffer, binary_response_length)
         while bytes_procesed > 0:
             if self._process_rdcp_command(response):
                 logger.warning(
@@ -57,7 +63,15 @@ class XBDMTransport(ip_transport.IPTransport):
                 )
                 break
             transport.shift_read_buffer(bytes_procesed)
-            bytes_procesed = response.parse(transport.read_buffer)
+
+            binary_response_length = 0
+            if self._command_queue:
+                binary_response_length = self._command_queue[
+                    0
+                ].expected_binary_response_length
+            bytes_procesed = response.parse(
+                transport.read_buffer, binary_response_length
+            )
 
         logger.debug(f"After processing: {transport.read_buffer}")
 
