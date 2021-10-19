@@ -890,6 +890,29 @@ class GetPalette(_ProcessedCommand):
         self.body = bytes(" STAGE=0x%X" % stage, "utf-8")
 
 
+class GetProcessID(_ProcessedCommand):
+    """Retrieves the ID of the currently running process (must be debuggable)."""
+
+    class Response(_ProcessedResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            self.process_id = None
+
+            if not self.ok:
+                return
+
+            entries = response.parse_data_map()
+            self.process_id = rdcp_response.get_int_property(entries, b"pid")
+
+        @property
+        def _body_str(self) -> str:
+            return f"process_id: {self.process_id}"
+
+    def __init__(self, handler=None):
+        super().__init__("getpid", response_class=self.Response, handler=handler)
+
+
 class Go(_ProcessedCommand):
     """Resumes execution of all threads."""
 
