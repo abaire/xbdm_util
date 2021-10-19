@@ -659,6 +659,17 @@ class IsStopped(_ProcessedCommand):
         self.body = bytes(f" thread={thread_id}", "utf-8")
 
 
+class PDBInfo(_ProcessedCommand):
+    """Retrieves Program Database information."""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(self, addr, handler=None):
+        super().__init__("pdbinfo", response_class=self.Response, handler=handler)
+        self.body = bytes(" addr=0x%X" % addr, "utf-8")
+
+
 class QueryPerformanceCounter(_ProcessedCommand):
     """Retrieves performance counter information."""
 
