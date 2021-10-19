@@ -745,6 +745,45 @@ class GetFile(_ProcessedCommand):
         )
 
 
+class GetFileAttributes(_ProcessedCommand):
+    """Retrieves attributes of a file."""
+
+    class Response(_ProcessedRawBodyResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            if not self.ok:
+                self.filesize = None
+                self.create_timestamp = None
+                self.change_timestamp = None
+                return
+
+            entries = response.parse_data_map()
+            self.filesize = rdcp_response.get_qword_property(
+                entries, b"sizelo", b"sizehi"
+            )
+            self.create_timestamp = rdcp_response.get_qword_property(
+                entries, b"createlo", b"createhi"
+            )
+            self.change_timestamp = rdcp_response.get_qword_property(
+                entries, b"changelo", b"changehi"
+            )
+
+        @property
+        def ok(self):
+            return self._status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+
+        @property
+        def _body_str(self) -> str:
+            return f" size: {self.filesize} create_time: {self.create_timestamp} change_time={self.change_timestamp}"
+
+    def __init__(self, name: str, handler=None):
+        super().__init__(
+            "getfileattributes", response_class=self.Response, handler=handler
+        )
+        self.body = bytes(f' name="{name}"', "utf-8")
+
+
 class GetMem(_ProcessedCommand):
     """Gets the contents of a block of memory."""
 
