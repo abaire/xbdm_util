@@ -1,4 +1,6 @@
 import logging
+import struct
+
 import wx
 from wx.lib import newevent
 
@@ -207,7 +209,10 @@ class XBDMDialog(wx.Dialog):
         # cmd = rdcp_command.SendFile("e:\\Tools\\TestDir\\test.txt", b"File content", handler=print)
         # self._bridge.send_rdcp_command(cmd)
 
-        cmd = rdcp_command.GetFileAttributes("e:\\Tools\\TestDir", handler=print)
+        cmd = rdcp_command.GetMem(0x110000, 4, handler=print)
+        self._bridge.send_rdcp_command(cmd)
+
+        cmd = rdcp_command.SetMem(0x110000, struct.pack("I", 0x0000), handler=print)
         self._bridge.send_rdcp_command(cmd)
 
         # cmd = rdcp_command.SetFileAttributes("e:\\Tools\\TestDir\\test.txt", create_timestamp=132000000000000000, handler=print)

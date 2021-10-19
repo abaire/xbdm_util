@@ -1805,6 +1805,18 @@ class SetFileAttributes(_ProcessedCommand):
             )
 
 
+class SetMem(_ProcessedCommand):
+    """Sets the value of a block of memory."""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(self, addr: int, data: bytes, handler=None):
+        super().__init__("setmem", response_class=self.Response, handler=handler)
+        self.body = b" addr=0x%X data=" % addr
+        self.body += binascii.hexlify(data)
+
+
 class Stop(_ProcessedCommand):
     """Stops execution of all threads."""
 
