@@ -564,6 +564,20 @@ class DriveList(_ProcessedCommand):
         super().__init__("drivelist", response_class=self.Response, handler=handler)
 
 
+class Dedicate(_ProcessedCommand):
+    """Sets connection as dedicated"""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(self, global_enable=None, handler_name=None, handler=None):
+        super().__init__("dedicate", response_class=self.Response, handler=handler)
+        if global_enable:
+            self.body = b" global"
+        elif handler_name:
+            self.body = bytes(f' handler="{handler_name}"', "utf-8")
+
+
 class FuncCall(_ProcessedCommand):
     """??? thread must be stopped, just returns OK"""
 
