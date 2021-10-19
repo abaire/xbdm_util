@@ -401,6 +401,47 @@ class DbgnameSet(_ProcessedCommand):
             self.body = bytes(f' name="{new_name}"', "utf-8")
 
 
+class DbgOptions(_ProcessedCommand):
+    """Sets or gets the "crashdump" and "dpctrace" flags."""
+
+    class Response(_ProcessedResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            if not self.ok:
+                self.enable_crashdump = None
+                self.enable_dpctrace = None
+                return
+
+            entries = response.parse_data_map()
+            self.enable_crashdump = rdcp_response.get_bool_property(
+                entries, b"crashdump"
+            )
+            self.enable_dpctrace = rdcp_response.get_bool_property(entries, b"dpctrace")
+
+        @property
+        def _body_str(self) -> str:
+            return f" enable_crashdump={self.enable_crashdump} enable_dpctrace={self.enable_dpctrace}"
+
+    def __init__(self, enable_crashdump=None, enable_dpctrace=None, handler=None):
+        super().__init__("dbgoptions", response_class=self.Response, handler=handler)
+
+        setters = []
+
+        def value(flag):
+            if flag:
+                return "0x01"
+            return "0x00"
+
+        if enable_crashdump is not None:
+            setters.append(f"crashdump={value(enable_crashdump)}")
+        if enable_dpctrace is not None:
+            setters.append(f"dpctrace={value(enable_dpctrace)}")
+        if setters:
+            setter_str = " ".join(setters)
+            self._body = bytes(f" {setter_str}", "utf-8")
+
+
 class DriveList(_ProcessedCommand):
     """Lists mounted drives on the XBOX."""
 

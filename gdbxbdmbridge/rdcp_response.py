@@ -17,6 +17,11 @@ def get_int_property(property_map: {bytes: bytes}, key: bytes, default=0) -> int
     return int(get_utf_property(property_map, key, bytes(f"{default}", "utf-8")), 16)
 
 
+def get_bool_property(property_map: {bytes: bytes}, key: bytes, default=False) -> bool:
+    """Returns the value of the given key as a bool."""
+    return get_int_property(property_map, key, 1 if default else 0) != 0
+
+
 class RDCPResponse:
     """Models a Remote Debugging and Control Protocol response."""
 
