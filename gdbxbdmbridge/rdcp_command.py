@@ -470,6 +470,36 @@ class DebugMode(_ProcessedCommand):
         super().__init__("debugmode", response_class=self.Response, handler=handler)
 
 
+class Dedicate(_ProcessedCommand):
+    """Sets connection as dedicated."""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(self, global_enable=None, handler_name=None, handler=None):
+        super().__init__("dedicate", response_class=self.Response, handler=handler)
+        if global_enable:
+            self.body = b" global"
+        elif handler_name:
+            self.body = bytes(f' handler="{handler_name}"', "utf-8")
+
+
+class Delete(_ProcessedCommand):
+    """Deletes a file."""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(self, path, is_directory=False, handler=None):
+        super().__init__("delete", response_class=self.Response, handler=handler)
+        if is_directory:
+            dir_flag = " dir"
+        else:
+            dir_flag = ""
+
+        self.body = bytes(f' name="{path}"{dir_flag}', "utf-8")
+
+
 class DirList(_ProcessedCommand):
     """Lists contents of a path."""
 
@@ -564,36 +594,6 @@ class DriveList(_ProcessedCommand):
         super().__init__("drivelist", response_class=self.Response, handler=handler)
 
 
-class Dedicate(_ProcessedCommand):
-    """Sets connection as dedicated."""
-
-    class Response(_ProcessedRawBodyResponse):
-        pass
-
-    def __init__(self, global_enable=None, handler_name=None, handler=None):
-        super().__init__("dedicate", response_class=self.Response, handler=handler)
-        if global_enable:
-            self.body = b" global"
-        elif handler_name:
-            self.body = bytes(f' handler="{handler_name}"', "utf-8")
-
-
-class Delete(_ProcessedCommand):
-    """Deletes a file."""
-
-    class Response(_ProcessedRawBodyResponse):
-        pass
-
-    def __init__(self, path, is_directory=False, handler=None):
-        super().__init__("delete", response_class=self.Response, handler=handler)
-        if is_directory:
-            dir_flag = " dir"
-        else:
-            dir_flag = ""
-
-        self.body = bytes(f' name="{path}"{dir_flag}', "utf-8")
-
-
 class FuncCall(_ProcessedCommand):
     """??? thread must be stopped, just returns OK"""
 
@@ -637,6 +637,39 @@ class GetContext(_ProcessedCommand):
         else:
             flags = " " + " ".join(flags)
         self.body = bytes(f" thread={thread_id_str}{flags}", "utf-8")
+
+
+class GetD3DState(_ProcessedCommand):
+    """Retrieves the current D3D state."""
+
+    class Response(_ProcessedResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            self.printable_data = ""
+            self.data = bytes()
+
+            if not self.ok:
+                return
+
+            self.data = response.data
+            # TODO: Parse the response data and drop this.
+            self.printable_data = binascii.hexlify(self.data)
+
+        @property
+        def ok(self):
+            return self._status == rdcp_response.RDCPResponse.STATUS_BINARY_RESPONSE
+
+        @property
+        def _body_str(self) -> str:
+            return f"{self.printable_data}"
+
+    def __init__(
+        self,
+        handler=None,
+    ):
+        super().__init__("getd3dstate", response_class=self.Response, handler=handler)
+        self._binary_response_length = 1180
 
 
 class GetMem(_ProcessedCommand):

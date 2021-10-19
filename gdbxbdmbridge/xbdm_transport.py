@@ -73,7 +73,9 @@ class XBDMTransport(ip_transport.IPTransport):
                 transport.read_buffer, binary_response_length
             )
 
-        logger.debug(f"After processing: {transport.read_buffer}")
+        logger.debug(
+            f"After processing: [{len(transport.read_buffer)}] {transport.read_buffer}"
+        )
 
     def _process_rdcp_command(self, response: rdcp_response.RDCPResponse) -> bool:
         """Processes a single RDCPResponse. Return True to close the connection"""
