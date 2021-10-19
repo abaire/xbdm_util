@@ -659,8 +659,19 @@ class IsStopped(_ProcessedCommand):
         self.body = bytes(f" thread={thread_id}", "utf-8")
 
 
+class ModLongName(_ProcessedCommand):
+    """??? 'no long name available'"""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(self, name, handler=None):
+        super().__init__("modlong", response_class=self.Response, handler=handler)
+        self.body = bytes(f' name="{name}"', "utf-8")
+
+
 class ModSections(_ProcessedCommand):
-    """Returns the currently running executable modules."""
+    """Returns information about the sections in the given executable module."""
 
     class Response(_ProcessedResponse):
         def __init__(self, response: rdcp_response.RDCPResponse):
