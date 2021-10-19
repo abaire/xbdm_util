@@ -92,7 +92,14 @@ class RDCPResponse:
     def debug_log(self):
         logger.debug(f"{self.__class__.__name__}::{self.status}\n{self.data}\n\n")
 
-    def parse_data_map(self) -> {str, str}:
+    def parse_multiline(self) -> [bytes]:
+        """Processes self.data as a list of lines."""
+        if not self.data:
+            return []
+
+        return self.data.split(self.TERMINATOR)
+
+    def parse_data_map(self) -> {bytes, bytes}:
         """Processes self.data as a space-delimited list of key=value pairs."""
         if not self.data:
             return {}

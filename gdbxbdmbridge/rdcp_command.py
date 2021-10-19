@@ -194,7 +194,11 @@ class _ProcessedResponse:
                 self._status, "??INVALID??"
             )
 
-        ret = f"{self.__class__.__qualname__}::{self._status}:{message}{self._body_str}"
+        body = self._body_str
+        if body:
+            body = f" {body}"
+
+        ret = f"{self.__class__.__qualname__}::{self._status}:{message}{body}"
         return ret
 
 
@@ -226,7 +230,7 @@ class AltAddr(_ProcessedCommand):
 
         @property
         def _body_str(self) -> str:
-            return f" {self.alt_ip}"
+            return self.alt_ip
 
     def __init__(self, handler=None):
         super().__init__("altaddr", response_class=self.Response, handler=handler)
@@ -378,7 +382,7 @@ class DbgnameGet(_ProcessedCommand):
 
         @property
         def _body_str(self) -> str:
-            return f" {self.name}"
+            return {self.name}
 
     def __init__(self, handler=None):
         super().__init__("dbgname", response_class=self.Response, handler=handler)
@@ -416,7 +420,7 @@ class DbgOptions(_ProcessedCommand):
 
         @property
         def _body_str(self) -> str:
-            return f" enable_crashdump={self.enable_crashdump} enable_dpctrace={self.enable_dpctrace}"
+            return f"enable_crashdump={self.enable_crashdump} enable_dpctrace={self.enable_dpctrace}"
 
     def __init__(self, enable_crashdump=None, enable_dpctrace=None, handler=None):
         super().__init__("dbgoptions", response_class=self.Response, handler=handler)
@@ -485,30 +489,10 @@ class DMVersion(_ProcessedCommand):
 
         @property
         def _body_str(self) -> str:
-            return f" version={self.version}"
+            return f"version={self.version}"
 
     def __init__(self, handler=None):
         super().__init__("dmversion", response_class=self.Response, handler=handler)
-
-
-class DriveList(_ProcessedCommand):
-    """Lists mounted drives on the XBOX."""
-
-    class Response(_ProcessedResponse):
-        def __init__(self, response: rdcp_response.RDCPResponse):
-            super().__init__(response)
-
-            if not self.ok:
-                self.drives = None
-            else:
-                self.drives = sorted([chr(x) for x in response.data])
-
-        @property
-        def _body_str(self) -> str:
-            return f" {self.drives}"
-
-    def __init__(self, handler=None):
-        super().__init__("drivelist", response_class=self.Response, handler=handler)
 
 
 class DriveFreeSpace(_ProcessedCommand):
@@ -551,10 +535,80 @@ class DriveFreeSpace(_ProcessedCommand):
 
         @property
         def _body_str(self) -> str:
-            return f"  total: {self.total_bytes} total free: {self.total_free_bytes} free to caller: {self.free_to_caller}"
+            return f"total: {self.total_bytes} total free: {self.total_free_bytes} free to caller: {self.free_to_caller}"
 
     def __init__(self, drive_letter, handler=None):
         super().__init__(
             "drivefreespace", response_class=self.Response, handler=handler
         )
         self.body = bytes(f' name="{drive_letter}:\\"', "utf-8")
+
+
+class DriveList(_ProcessedCommand):
+    """Lists mounted drives on the XBOX."""
+
+    class Response(_ProcessedResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            if not self.ok:
+                self.drives = None
+            else:
+                self.drives = sorted([chr(x) for x in response.data])
+
+        @property
+        def _body_str(self) -> str:
+            return {self.drives}
+
+    def __init__(self, handler=None):
+        super().__init__("drivelist", response_class=self.Response, handler=handler)
+
+
+class GetContext(_ProcessedCommand):
+    """???"""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(
+        self,
+        thread_id,
+        enable_control=False,
+        enable_interrupt=False,
+        enable_full=False,
+        enable_fp=False,
+        handler=None,
+    ):
+        super().__init__("getcontext", response_class=self.Response, handler=handler)
+        thread_id_str = "0x%X" % thread_id
+        flags = []
+        if enable_control:
+            flags.append("control")
+        if enable_interrupt:
+            flags.append("int")
+        if enable_full:
+            flags.append("full")
+        if enable_fp:
+            flags.append("fp")
+        if not flags:
+            flags = ""
+        else:
+            flags = " " + " ".join(flags)
+        self.body = bytes(f" thread={thread_id_str}{flags}", "utf-8")
+
+
+class Threads(_ProcessedCommand):
+    """Gets the list of active threads."""
+
+    class Response(_ProcessedRawBodyResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+            lines = response.parse_multiline()
+            self.thread_ids = [int(x.decode("utf-8")) for x in lines]
+
+        @property
+        def _body_str(self) -> str:
+            return self.thread_ids
+
+    def __init__(self, handler=None):
+        super().__init__("threads", response_class=self.Response, handler=handler)
