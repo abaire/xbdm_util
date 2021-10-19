@@ -913,6 +913,41 @@ class GetProcessID(_ProcessedCommand):
         super().__init__("getpid", response_class=self.Response, handler=handler)
 
 
+class GetChecksum(_ProcessedCommand):
+    """Returns the checksum for a memory region."""
+
+    class Response(_ProcessedResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            self.printable_data = ""
+            self.data = bytes()
+
+            if not self.ok:
+                return
+
+            self.data = response.data
+            # TODO: Consider dropping printable_data.
+            self.printable_data = binascii.hexlify(self.data)
+
+        @property
+        def ok(self):
+            return self._status == rdcp_response.RDCPResponse.STATUS_BINARY_RESPONSE
+
+        @property
+        def _body_str(self) -> str:
+            return f"{self.printable_data}"
+
+    def __init__(self, addr: int, length: int, blocksize: int, handler=None):
+        super().__init__("getsum", response_class=self.Response, handler=handler)
+        # BLOCKSIZE < 8 will hang the device.
+        assert blocksize >= 8
+        self.body = bytes(
+            " ADDR=0x%X LENGTH=0x%X BLOCKSIZE=0x%X" % (addr, length, blocksize), "utf-8"
+        )
+        self._binary_response_length = 384 // blocksize
+
+
 class Go(_ProcessedCommand):
     """Resumes execution of all threads."""
 
