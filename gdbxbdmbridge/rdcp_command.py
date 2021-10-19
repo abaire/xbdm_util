@@ -561,6 +561,7 @@ class GetContext(_ProcessedCommand):
     """???"""
 
     class Response(_ProcessedRawBodyResponse):
+        # Response should be multiline but is always empty in dashboard case.
         pass
 
     def __init__(
@@ -573,7 +574,7 @@ class GetContext(_ProcessedCommand):
         handler=None,
     ):
         super().__init__("getcontext", response_class=self.Response, handler=handler)
-        thread_id_str = "0x%X" % thread_id
+        thread_id_str = "%d" % thread_id
         flags = []
         if enable_control:
             flags.append("control")
@@ -646,3 +647,29 @@ class Threads(_ProcessedCommand):
 
     def __init__(self, handler=None):
         super().__init__("threads", response_class=self.Response, handler=handler)
+
+
+class XTLInfo(_ProcessedCommand):
+    """Retrieves last error info."""
+
+    class Response(_ProcessedResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            if not self.ok:
+                self.lasterr = None
+                return
+
+            entries = response.parse_data_map()
+            self.lasterr = rdcp_response.get_int_property(entries, b"lasterr")
+
+        @property
+        def ok(self):
+            return self._status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+
+        @property
+        def _body_str(self) -> str:
+            return f" lasterr={self.lasterr}"
+
+    def __init__(self, handler=None):
+        super().__init__("xtlinfo", response_class=self.Response, handler=handler)
