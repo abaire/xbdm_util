@@ -1514,6 +1514,21 @@ class PDBInfo(_ProcessedCommand):
         self.body = bytes(" addr=0x%X" % addr, "utf-8")
 
 
+class PSSnap(_ProcessedCommand):
+    """Takes a D3D snapshot (binary must be compiled as debug)."""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(self, x: int, y: int, flags: int = 0, marker: int = 0, handler=None):
+        super().__init__("pssnap", response_class=self.Response, handler=handler)
+        self.body = bytes(" x=0x%X y=0x%X" % (x, y), "utf-8")
+        if flags:
+            self.body += b" flags=0x%X" % flags
+        if marker:
+            self.body += b" marker=0x%X" % marker
+
+
 class QueryPerformanceCounter(_ProcessedCommand):
     """Retrieves performance counter information."""
 

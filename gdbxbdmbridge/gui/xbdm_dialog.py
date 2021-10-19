@@ -192,7 +192,7 @@ class XBDMDialog(wx.Dialog):
         # cmd = rdcp_command.GetMemBinary(0xB0011360, 128, handler=print)
         # self._bridge.send_rdcp_command(cmd)
 
-        cmd = rdcp_command.PBSnap(handler=print)
+        cmd = rdcp_command.PSSnap(10, 10, handler=print)
         self._bridge.send_rdcp_command(cmd)
 
     def _on_send(self, evt):
