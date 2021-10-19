@@ -1545,6 +1545,33 @@ class QueryPerformanceCounter(_ProcessedCommand):
         self.body = bytes(f' name="{name}"{counter_type}', "utf-8")
 
 
+class Reboot(_ProcessedCommand):
+    """Triggers a reboot."""
+
+    FLAG_WAIT = 1
+    FLAG_WARM = 2
+    FLAG_NO_DEBUG = 4
+    FLAG_STOP = 8
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(self, flags: int = 0, handler=None):
+        super().__init__("reboot", response_class=self.Response, handler=handler)
+        body = b""
+        if flags & self.FLAG_WAIT:
+            body += b" wait"
+        if flags & self.FLAG_WARM:
+            body += b" warm"
+        if flags & self.FLAG_NO_DEBUG:
+            body += b" nodebug"
+        if flags & self.FLAG_STOP:
+            body += b" stop"
+
+        if body:
+            self.body = body
+
+
 class Resume(_ProcessedCommand):
     """Resumes execution of the given thread."""
 
