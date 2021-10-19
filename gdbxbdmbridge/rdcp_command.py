@@ -1,5 +1,6 @@
 """Provides utilities in support of Remote Debugging and Control Protocol."""
 import binascii
+import enum
 import ipaddress
 import logging
 from typing import Callable
@@ -1105,6 +1106,22 @@ class IRTSweep(_ProcessedCommand):
 
     def __init__(self, handler=None):
         super().__init__("irtsweep", response_class=self.Response, handler=handler)
+
+
+class KernelDebug(_ProcessedCommand):
+    """Configures the KD."""
+
+    class Mode(enum.Enum):
+        ENABLE = b" enable"
+        DISABLE_EXCEPT = b" disable except"
+        DISABLE_EXCEPT_IF = b" disable exceptif"
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(self, mode: Mode, handler=None):
+        super().__init__("kd", response_class=self.Response, handler=handler)
+        self.body = mode.value
 
 
 class MemoryMapGlobal(_ProcessedCommand):

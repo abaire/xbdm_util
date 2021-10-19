@@ -184,7 +184,9 @@ class XBDMDialog(wx.Dialog):
         # cmd = rdcp_command.XBEInfo("e:\\Tools\\boxplorer\\default.xbe", handler=print)
         # self._bridge.send_rdcp_command(cmd)
 
-        cmd = rdcp_command.IRTSweep(handler=print)
+        cmd = rdcp_command.KernelDebug(
+            rdcp_command.KernelDebug.Mode.ENABLE, handler=print
+        )
         self._bridge.send_rdcp_command(cmd)
 
         # cmd = rdcp_command.GetMemBinary(0xB0011360, 128, handler=print)
