@@ -1907,6 +1907,16 @@ class ThreadInfo(_ProcessedCommand):
                 return
 
             entries = response.parse_data_map()
+            known_keys = {
+                b"suspend",
+                b"priority",
+                b"tlsbase",
+                b"start",
+                b"base",
+                b"limit",
+                b"createlo",
+                b"createhi",
+            }
             self.suspend = rdcp_response.get_bool_property(entries, b"suspend")
             self.priority = rdcp_response.get_int_property(entries, b"priority")
             self.tlsbase = rdcp_response.get_int_property(entries, b"tlsbase")
@@ -1916,6 +1926,11 @@ class ThreadInfo(_ProcessedCommand):
             self.create = rdcp_response.get_qword_property(
                 entries, b"createlo", b"createhi"
             )
+
+            unknown_keys = set(entries.keys()) - known_keys
+            if unknown_keys:
+                logger.error(f"Found unknown thread info: {unknown_keys}")
+                assert False
 
         @property
         def ok(self):

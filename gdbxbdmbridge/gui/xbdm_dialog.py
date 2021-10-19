@@ -177,7 +177,7 @@ class XBDMDialog(wx.Dialog):
 
         # def thread_list_handler(response):
         #     for thread_id in response.thread_ids:
-        #         cmd = rdcp_command.GetContext(thread_id, handler=print)
+        #         cmd = rdcp_command.ThreadInfo(thread_id, handler=print)
         #         self._bridge.send_rdcp_command(cmd)
         #
         # cmd = rdcp_command.Threads(handler=thread_list_handler)
@@ -197,8 +197,8 @@ class XBDMDialog(wx.Dialog):
         # cmd = rdcp_command.Stop()
         # self._bridge.send_rdcp_command(cmd)
 
-        # cmd = rdcp_command.Reboot(rdcp_command.Reboot.FLAG_WARM, handler=print)
-        # self._bridge.send_rdcp_command(cmd)
+        cmd = rdcp_command.Reboot(rdcp_command.Reboot.FLAG_WARM, handler=print)
+        self._bridge.send_rdcp_command(cmd)
 
         # cmd = rdcp_command.Mkdir("e:\\Tools\\TestDir", handler=print)
         # self._bridge.send_rdcp_command(cmd)
@@ -210,16 +210,16 @@ class XBDMDialog(wx.Dialog):
         # cmd = rdcp_command.SendFile("e:\\Tools\\TestDir\\test.txt", b"File content", handler=print)
         # self._bridge.send_rdcp_command(cmd)
 
-        cmd = rdcp_command.GetFile("e:\\Tools\\TestDir\\write_test.txt", handler=print)
-        self._bridge.send_rdcp_command(cmd)
-
-        cmd = rdcp_command.WriteFile(
-            "e:\\Tools\\TestDir\\write_test.txt", b"0000", offset=4, handler=print
-        )
-        self._bridge.send_rdcp_command(cmd)
-
-        cmd = rdcp_command.GetFile("e:\\Tools\\TestDir\\write_test.txt", handler=print)
-        self._bridge.send_rdcp_command(cmd)
+        # cmd = rdcp_command.GetFile("e:\\Tools\\TestDir\\write_test.txt", handler=print)
+        # self._bridge.send_rdcp_command(cmd)
+        #
+        # cmd = rdcp_command.WriteFile(
+        #     "e:\\Tools\\TestDir\\write_test.txt", b"0000", offset=4, handler=print
+        # )
+        # self._bridge.send_rdcp_command(cmd)
+        #
+        # cmd = rdcp_command.GetFile("e:\\Tools\\TestDir\\write_test.txt", handler=print)
+        # self._bridge.send_rdcp_command(cmd)
 
         # cmd = rdcp_command.SetFileAttributes("e:\\Tools\\TestDir\\test.txt", create_timestamp=132000000000000000, handler=print)
         # self._bridge.send_rdcp_command(cmd)
