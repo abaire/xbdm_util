@@ -1028,6 +1028,17 @@ class Go(_ProcessedCommand):
         super().__init__("go", response_class=self.Response, handler=handler)
 
 
+class GPUCounter(_ProcessedCommand):
+    """Enables or disables GPU performance counters."""
+
+    class Response(_ProcessedResponse):
+        pass
+
+    def __init__(self, enable: bool = True, handler=None):
+        super().__init__("gpucount", response_class=self.Response, handler=handler)
+        self.body = b" enable" if enable else b" disable"
+
+
 class Halt(_ProcessedCommand):
     """Halts execution of the given thread."""
 
