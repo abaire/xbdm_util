@@ -1277,6 +1277,17 @@ class MemoryMapGlobal(_ProcessedCommand):
         super().__init__("mmglobal", response_class=self.Response, handler=handler)
 
 
+class Mkdir(_ProcessedCommand):
+    """Creates a directory."""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(self, name: str, handler=None):
+        super().__init__("mkdir", response_class=self.Response, handler=handler)
+        self.body = bytes(f' name="{name}"', "utf-8")
+
+
 class ModLongName(_ProcessedCommand):
     """??? 'no long name available'"""
 
