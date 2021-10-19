@@ -113,6 +113,11 @@ class GDBXBDMBridge:
 
         self._close()
 
+    def await_empty_queue(self) -> None:
+        # TODO: Use condition variables instead of spinning.
+        while self._xbdm.has_buffered_data:
+            time.sleep(0.05)
+
     def _accept_gdb_connection(self):
         remote, remote_addr = self._listen_sock.accept()
 

@@ -27,6 +27,11 @@ class XBDMTransport(ip_transport.IPTransport):
     def can_process_commands(self) -> bool:
         return self._state >= self.STATE_CONNECTED
 
+    @property
+    def has_buffered_data(self) -> bool:
+        # TODO: Make this thread safe.
+        return self._command_queue or self._read_buffer or self._write_buffer
+
     def send_command(self, cmd: rdcp_command.RDCPCommand) -> bool:
         logger.debug(f"Queueing RDCP command {cmd}")
         if self._state < self.STATE_CONNECTED:
