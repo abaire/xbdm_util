@@ -1671,6 +1671,19 @@ class SendFile(_ProcessedCommand):
         self._binary_payload = content
 
 
+# class ServiceName(_ProcessedCommand):
+#     """???"""
+#
+#     class Response(_ProcessedRawBodyResponse):
+#         pass
+#
+#     def __init__(self, handler=None):
+#         super().__init__("servname", response_class=self.Response, handler=handler)
+#         # id(int) name(string)
+#         # name must begin with one of (prod|part|test)
+#         # There's a second mode that looks like it can take a command string that matches some internal state var
+
+
 class Stop(_ProcessedCommand):
     """Stops execution of all threads."""
 
