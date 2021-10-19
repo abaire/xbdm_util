@@ -20,14 +20,9 @@ class RDCPCommand:
         "altaddr",  #  > addr=0x0a000210
         "authuser",  # (resp=QWORD name=STRING) > 414:access denied  # Looks like "passwd" is another param maybe for an older XDK?
         # "boxid",  # Can only be executed if security is enabled.
-        "break",  # now, start, clearall, clear, addr, read, write, execute, size
-        "bye",
         "capctrl",  # () > 400
-        "continue",
         "crashdump",
         "d3dopcode",
-        "dbgname",
-        "dbgoptions",
         "debugger",
         "debugmode",
         "dedicate",
@@ -440,6 +435,18 @@ class DbgOptions(_ProcessedCommand):
         if setters:
             setter_str = " ".join(setters)
             self._body = bytes(f" {setter_str}", "utf-8")
+
+
+class Debugger(_ProcessedCommand):
+    """Connects or disconnects the debugger."""
+
+    class Response(_ProcessedResponse):
+        pass
+
+    def __init__(self, connect=True, handler=None):
+        super().__init__("debugger", response_class=self.Response, handler=handler)
+        cmd = "connect" if connect else "disconnect"
+        self.body = bytes(f' {cmd}"', "utf-8")
 
 
 class DriveList(_ProcessedCommand):
