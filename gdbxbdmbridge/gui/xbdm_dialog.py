@@ -192,11 +192,25 @@ class XBDMDialog(wx.Dialog):
         # cmd = rdcp_command.GetMemBinary(0xB0011360, 128, handler=print)
         # self._bridge.send_rdcp_command(cmd)
 
-        cmd = rdcp_command.SendFile(
-            "e:\\Tools\\RenamedTestDir\\test_file.txt",
-            b"This is content",
-            handler=print,
-        )
+        # cmd = rdcp_command.Stop()
+        # self._bridge.send_rdcp_command(cmd)
+
+        cmd = rdcp_command.Threads(handler=print)
+        self._bridge.send_rdcp_command(cmd)
+
+        cmd = rdcp_command.Halt(48, handler=print)
+        self._bridge.send_rdcp_command(cmd)
+
+        cmd = rdcp_command.SetContext(48, handler=print)
+        self._bridge.send_rdcp_command(cmd)
+
+        cmd = rdcp_command.GetContext(48, handler=print)
+        self._bridge.send_rdcp_command(cmd)
+
+        cmd = rdcp_command.Resume(48, handler=print)
+        self._bridge.send_rdcp_command(cmd)
+
+        cmd = rdcp_command.Go(handler=print)
         self._bridge.send_rdcp_command(cmd)
 
     def _on_send(self, evt):

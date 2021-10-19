@@ -632,10 +632,10 @@ class FuncCall(_ProcessedCommand):
 
 
 class GetContext(_ProcessedCommand):
-    """???"""
+    """Gets the active thread context."""
 
     class Response(_ProcessedRawBodyResponse):
-        # Response should be multiline but is always empty in dashboard case.
+        # Response should be multiline but is always empty.
         pass
 
     def __init__(
@@ -1692,7 +1692,20 @@ class SetConfig(_ProcessedCommand):
 
     def __init__(self, index: int, value: int, handler=None):
         super().__init__("setconfig", response_class=self.Response, handler=handler)
-        body = b" index=0x%X value=0x%X" % (index, value)
+        self.body = b" index=0x%X value=0x%X" % (index, value)
+
+
+class SetContext(_ProcessedCommand):
+    """Sets the active thread context."""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(self, thread_id: int, ext: Optional[int] = None, handler=None):
+        super().__init__("setcontext", response_class=self.Response, handler=handler)
+        self.body = b" thread=0x%X " % thread_id
+        if ext is not None:
+            self.body += b" ext=0x%X" % ext
 
 
 class Stop(_ProcessedCommand):
