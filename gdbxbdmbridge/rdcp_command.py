@@ -591,6 +591,27 @@ class GetContext(_ProcessedCommand):
         self.body = bytes(f" thread={thread_id_str}{flags}", "utf-8")
 
 
+class Systime(_ProcessedCommand):
+    """Retrieves the system time."""
+
+    class Response(_ProcessedResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            if not self.ok:
+                self.time = None
+
+            entries = response.parse_data_map()
+            self.time = rdcp_response.get_qword_property(entries, b"low", b"high")
+
+        @property
+        def _body_str(self) -> str:
+            return f"{self.time}"
+
+    def __init__(self, handler=None):
+        super().__init__("systime", response_class=self.Response, handler=handler)
+
+
 class ThreadInfo(_ProcessedCommand):
     """Gets information about a specific thread."""
 
@@ -647,6 +668,28 @@ class Threads(_ProcessedCommand):
 
     def __init__(self, handler=None):
         super().__init__("threads", response_class=self.Response, handler=handler)
+
+
+# class Title(_ProcessedCommand):
+#     """???"""
+#
+#     class Response(_ProcessedResponse):
+#         def __init__(self, response: rdcp_response.RDCPResponse):
+#             super().__init__(response)
+#             lines = response.parse_multiline()
+#             self.thread_ids = [int(x.decode("utf-8")) for x in lines]
+#
+#         @property
+#         def _body_str(self) -> str:
+#             return str(self.thread_ids)
+#
+#     def __init__(self, handler=None):
+#         super().__init__("threads", response_class=self.Response, handler=handler)
+#         # [nopersist]
+#         # [dir]
+#         # [persist]
+#         # name
+#         # cmdline
 
 
 class XBEInfo(_ProcessedCommand):
