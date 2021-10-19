@@ -318,6 +318,20 @@ class Bye(_ProcessedCommand):
         super().__init__("bye", response_class=self.Response, handler=handler)
 
 
+class Continue(_ProcessedCommand):
+    """Continues execution of the given thread."""
+
+    class Response(_ProcessedResponse):
+        pass
+
+    def __init__(self, thread_id, exception: bool = False, handler=None):
+        # TODO: Document 'exception' flag behavior.
+        super().__init__("continue", response_class=self.Response, handler=handler)
+        thread_id_string = "0x%X" % thread_id
+        exception_string = " exception" if exception else ""
+        self.body = bytes(f" thread={thread_id_string}{exception_string}")
+
+
 class DriveList(_ProcessedCommand):
     """Lists mounted drives on the XBOX."""
 
