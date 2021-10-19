@@ -209,10 +209,7 @@ class XBDMDialog(wx.Dialog):
         # cmd = rdcp_command.SendFile("e:\\Tools\\TestDir\\test.txt", b"File content", handler=print)
         # self._bridge.send_rdcp_command(cmd)
 
-        cmd = rdcp_command.GetMem(0x110000, 4, handler=print)
-        self._bridge.send_rdcp_command(cmd)
-
-        cmd = rdcp_command.SetMem(0x110000, struct.pack("I", 0x0000), handler=print)
+        cmd = rdcp_command.SetSystemTime(132791486351720000, handler=print)
         self._bridge.send_rdcp_command(cmd)
 
         # cmd = rdcp_command.SetFileAttributes("e:\\Tools\\TestDir\\test.txt", create_timestamp=132000000000000000, handler=print)

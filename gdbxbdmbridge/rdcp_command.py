@@ -1817,6 +1817,22 @@ class SetMem(_ProcessedCommand):
         self.body += binascii.hexlify(data)
 
 
+class SetSystemTime(_ProcessedCommand):
+    """Sets the system time."""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(self, nt_timestamp: int, timezone: Optional[int] = 0, handler=None):
+        super().__init__("setsystime", response_class=self.Response, handler=handler)
+        self.body = b" clocklo=0x%X clockhi=0x%X" % (
+            nt_timestamp & 0xFFFFFFFF,
+            (nt_timestamp >> 32) & 0xFFFFFFFF,
+        )
+        if timezone is not None:
+            self.body += b" tz=0x%X" % timezone
+
+
 class Stop(_ProcessedCommand):
     """Stops execution of all threads."""
 
@@ -1851,7 +1867,7 @@ class Suspend(_ProcessedCommand):
 # sysfileupd - Looks like this may be invoking a system update?
 
 
-class Systime(_ProcessedCommand):
+class SystemTime(_ProcessedCommand):
     """Retrieves the system time."""
 
     class Response(_ProcessedResponse):
