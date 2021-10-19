@@ -591,6 +591,16 @@ class GetContext(_ProcessedCommand):
         self.body = bytes(f" thread={thread_id_str}{flags}", "utf-8")
 
 
+class Go(_ProcessedCommand):
+    """Resumes execution of all threads."""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(self, handler=None):
+        super().__init__("go", response_class=self.Response, handler=handler)
+
+
 class Resume(_ProcessedCommand):
     """Resumes execution of the given thread."""
 
