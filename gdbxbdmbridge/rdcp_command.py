@@ -601,6 +601,17 @@ class Go(_ProcessedCommand):
         super().__init__("go", response_class=self.Response, handler=handler)
 
 
+class Halt(_ProcessedCommand):
+    """Halts execution of the given thread."""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(self, thread_id, handler=None):
+        super().__init__("halt", response_class=self.Response, handler=handler)
+        self.body = bytes(f" thread={thread_id}", "utf-8")
+
+
 class Resume(_ProcessedCommand):
     """Resumes execution of the given thread."""
 
