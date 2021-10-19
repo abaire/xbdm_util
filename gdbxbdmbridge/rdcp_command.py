@@ -2081,6 +2081,37 @@ class WalkMem(_ProcessedCommand):
         super().__init__("walkmem", response_class=self.Response, handler=handler)
 
 
+class WriteFile(_ProcessedCommand):
+    """Writes data into an existing file."""
+
+    class Response(_ProcessedResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            self.printable_data = ""
+            self.data = bytes()
+
+            if not self.ok:
+                return
+
+            self.printable_data, self.data = response.parse_hex_data()
+
+        @property
+        def ok(self):
+            return self._status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+
+        @property
+        def _body_str(self) -> str:
+            return f"{self.printable_data}"
+
+    def __init__(self, name: str, content: bytes, offset: int = 0, handler=None):
+        super().__init__("sendfile", response_class=self.Response, handler=handler)
+        self.body = bytes(
+            ' name="%s" length=0x%X offset=0x%X' % (name, len(content), offset), "utf-8"
+        )
+        self._binary_payload = content
+
+
 class XTLInfo(_ProcessedCommand):
     """Retrieves last error info."""
 
