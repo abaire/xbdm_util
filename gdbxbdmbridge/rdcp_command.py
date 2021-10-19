@@ -591,6 +591,27 @@ class GetContext(_ProcessedCommand):
         self.body = bytes(f" thread={thread_id_str}{flags}", "utf-8")
 
 
+class Resume(_ProcessedCommand):
+    """Resumes execution of the given thread."""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(self, thread_id, handler=None):
+        super().__init__("resume", response_class=self.Response, handler=handler)
+        self.body = bytes(f" thread={thread_id}", "utf-8")
+
+
+class Stop(_ProcessedCommand):
+    """Stops execution of all threads."""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(self, handler=None):
+        super().__init__("stop", response_class=self.Response, handler=handler)
+
+
 class StopOn(_ProcessedCommand):
     """Sets the events that will break into the debugger."""
 
@@ -600,7 +621,7 @@ class StopOn(_ProcessedCommand):
     DEBUGSTR = 0x04
     STACKTRACE = 0x08
 
-    class Response(_ProcessedResponse):
+    class Response(_ProcessedRawBodyResponse):
         pass
 
     def __init__(self, events: int = 0xFFFFFFFF, handler=None):
