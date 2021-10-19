@@ -659,6 +659,71 @@ class IsStopped(_ProcessedCommand):
         self.body = bytes(f" thread={thread_id}", "utf-8")
 
 
+class MemoryMapGlobal(_ProcessedCommand):
+    """Returns info about the global memory map."""
+
+    class Response(_ProcessedResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            self.MmHighestPhysicalPage = None
+            self.RetailPfnRegion = None
+            self.SystemPteRange = None
+            self.AvailablePages = None
+            self.AllocatedPagesByUsage = None
+            self.PfnDatabase = None
+            self.AddressSpaceLock = None
+            self.VadRoot = None
+            self.VadHint = None
+            self.VadFreeHint = None
+            self.MmNumberOfPhysicalPages = None
+            self.MmAvailablePages = None
+
+            if not self.ok:
+                return
+
+            entries = response.parse_data_map()
+            self.MmHighestPhysicalPage = rdcp_response.get_int_property(
+                entries, b"MmHighestPhysicalPage"
+            )
+            self.RetailPfnRegion = rdcp_response.get_int_property(
+                entries, b"RetailPfnRegion"
+            )
+            self.SystemPteRange = rdcp_response.get_int_property(
+                entries, b"SystemPteRange"
+            )
+            self.AvailablePages = rdcp_response.get_int_property(
+                entries, b"AvailablePages"
+            )
+            self.AllocatedPagesByUsage = rdcp_response.get_int_property(
+                entries, b"AllocatedPagesByUsage"
+            )
+            self.PfnDatabase = rdcp_response.get_int_property(entries, b"PfnDatabase")
+            self.AddressSpaceLock = rdcp_response.get_int_property(
+                entries, b"AddressSpaceLock"
+            )
+            self.VadRoot = rdcp_response.get_int_property(entries, b"VadRoot")
+            self.VadHint = rdcp_response.get_int_property(entries, b"VadHint")
+            self.VadFreeHint = rdcp_response.get_int_property(entries, b"VadFreeHint")
+            self.MmNumberOfPhysicalPages = rdcp_response.get_int_property(
+                entries, b"MmNumberOfPhysicalPages"
+            )
+            self.MmAvailablePages = rdcp_response.get_int_property(
+                entries, b"MmAvailablePages"
+            )
+
+        @property
+        def ok(self):
+            return self._status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+
+        @property
+        def _body_str(self) -> str:
+            return f"MmHighestPhysicalPage: {self.MmHighestPhysicalPage} RetailPfnRegion: {self.RetailPfnRegion} SystemPteRange: {self.SystemPteRange} AvailablePages: {self.AvailablePages} AllocatedPagesByUsage: {self.AllocatedPagesByUsage} PfnDatabase: {self.PfnDatabase} AddressSpaceLock: {self.AddressSpaceLock} VadRoot: {self.VadRoot} VadHint: {self.VadHint} VadFreeHint: {self.VadFreeHint} MmNumberOfPhysicalPages: {self.MmNumberOfPhysicalPages} MmAvailablePages: {self.MmAvailablePages}"
+
+    def __init__(self, name, handler=None):
+        super().__init__("mmglobal", response_class=self.Response, handler=handler)
+
+
 class ModLongName(_ProcessedCommand):
     """??? 'no long name available'"""
 
