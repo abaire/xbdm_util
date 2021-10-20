@@ -1,5 +1,6 @@
 import logging
 from typing import Optional
+from typing import Tuple
 
 from . import bridge
 from . import bridge_info
@@ -11,11 +12,11 @@ class BridgeManager:
     """Manages a set of GDBXBDMBridge instances."""
 
     def __init__(self):
-        self._bridges: {(str, int): bridge.GDBXBDMBridge} = {}
+        self._bridges: {Tuple[str, int]: bridge.GDBXBDMBridge} = {}
 
     def start_bridge(
-        self, listen_ip: str, xbox_name: str, xbox_addr: (str, int)
-    ) -> (str, int):
+        self, listen_ip: str, xbox_name: str, xbox_addr: Tuple[str, int]
+    ) -> Tuple[str, int]:
         old_bridge: bridge.GDBXBDMBridge = self._bridges.get(xbox_addr, None)
         if old_bridge:
             return old_bridge.listen_addr
@@ -42,5 +43,5 @@ class BridgeManager:
             )
         return ret
 
-    def get_bridge(self, xbox_addr: (str, int)) -> Optional[bridge.GDBXBDMBridge]:
+    def get_bridge(self, xbox_addr: Tuple[str, int]) -> Optional[bridge.GDBXBDMBridge]:
         return self._bridges.get(xbox_addr)

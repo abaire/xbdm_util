@@ -1,6 +1,7 @@
 import logging
 import socket
 from typing import Optional
+from typing import Tuple
 from typing import Union
 
 logger = logging.getLogger(__name__)
@@ -12,7 +13,7 @@ class IPTransport:
     def __init__(self, process_callback, name=""):
         self.name = name
         self._sock: Optional[socket.socket] = None
-        self.addr: (str, int) = None
+        self.addr: Tuple[str, int] = None
         self._read_buffer = bytearray()
         self._write_buffer = bytearray()
         self._on_bytes_read = process_callback

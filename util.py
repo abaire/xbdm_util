@@ -5,6 +5,7 @@ import argparse
 import logging
 import sys
 import time
+from typing import Tuple
 
 from gdbxbdmbridge import bridge_manager
 from gdbxbdmbridge import rdcp_command
@@ -14,15 +15,23 @@ from gdbxbdmbridge.bridge import GDBXBDMBridge
 XBDM_PORT = 731
 logger = logging.getLogger(__name__)
 
+
 def PrintMemoryWalk(response: rdcp_command.WalkMem.Response):
     response.regions.sort(key=lambda x: x["base_address"])
     for region in response.regions:
-        print("Base address: 0x%08X  size: %8d  protection: 0x%X" % (region["base_address"], region["size"], region["protection_flags"]))
+        print(
+            "Base address: 0x%08X  size: %8d  protection: 0x%X"
+            % (region["base_address"], region["size"], region["protection_flags"])
+        )
 
 
 def execute_command(args, bridge: GDBXBDMBridge) -> int:
 
     cmd = rdcp_command.WalkMem(handler=PrintMemoryWalk)
+    bridge.send_rdcp_command(cmd)
+
+    # cmd = rdcp_command.Reboot(rdcp_command.Reboot.FLAG_WARM)
+    cmd = rdcp_command.Reboot(rdcp_command.Reboot.FLAG_WAIT)
     bridge.send_rdcp_command(cmd)
 
     bridge.await_empty_queue()
@@ -51,7 +60,7 @@ def main(args):
     return ret
 
 
-def xbox_addr(value) -> (str, (str, int)):
+def xbox_addr(value) -> (str, Tuple[str, int]):
     components = value.split(":")
     if len(components) < 2 or len(components) > 3:
         raise argparse.ArgumentTypeError(
@@ -84,7 +93,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-dip",
         "--discovery_listen_ip",
-        nargs=1,
+        metavar="ip_address",
         default="",
         help="IP address to listen on for XBOX devkits.",
     )

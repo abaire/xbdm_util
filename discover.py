@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""See https://xboxdevwiki.net/Xbox_Debug_Monitor and https://sourceware.org/gdb/onlinedocs/gdb/Remote-Protocol.html"""
+"""Runs NAP discovery and reports any devices on the network."""
 
 import argparse
 import logging
@@ -7,7 +7,6 @@ import sys
 import time
 from typing import Tuple
 
-from gdbxbdmbridge import bridge_manager
 from gdbxbdmbridge import discoverer
 
 XBDM_PORT = 731
@@ -22,42 +21,23 @@ def main(args):
 
     logger.debug("Startup")
 
-    manager = bridge_manager.BridgeManager()
     xbox_discoverer = discoverer.XBOXDiscoverer(
         args.discovery_listen_ip, args.discovery_port
     )
 
-    # TODO: Support console-only mode
-    from gdbxbdmbridge import gui
+    def print_info(name: str, addr: Tuple[str, int]) -> None:
+        print(f'XBOX "{name}" at {addr[0]}:{addr[1]}')
 
-    app = gui.Application(xbox_discoverer, manager)
-
-    def add_bridge(name: str, addr: Tuple[str, int]) -> None:
-        manager.start_bridge(args.discovery_listen_ip, name, addr)
-        if app:
-            app.refresh_discovered_devices()
-
-    xbox_discoverer.set_on_discover_callback(add_bridge)
-
-    if args.xbox:
-        for entry in args.xbox:
-            (name, ip, port) = entry
-            xbox_discoverer.register(name, (ip, port))
+    xbox_discoverer.set_on_discover_callback(print_info)
 
     try:
         xbox_discoverer.start()
-        if app:
-            app.MainLoop()
-        else:
-            while True:
-                time.sleep(1000)
+        time.sleep(args.wait_time)
     except KeyboardInterrupt:
         xbox_discoverer.shutdown()
-        manager.shutdown()
         return 0
 
     xbox_discoverer.shutdown()
-    manager.shutdown()
     return 0
 
 
@@ -77,13 +57,14 @@ def xbox_addr(value):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+
     parser.add_argument(
-        "-x",
-        "--xbox",
-        metavar="xbox_name_ip_port",
-        action="append",
-        type=xbox_addr,
-        help="Forces the presence of an XBOX debug kit. Format: <name:ip>[:port].",
+        "-w",
+        "--wait_time",
+        metavar="seconds",
+        type=float,
+        default=30,
+        help="Number of seconds to wait for responses before exiting.",
     )
 
     parser.add_argument(
@@ -91,6 +72,7 @@ if __name__ == "__main__":
         "--discovery_listen_ip",
         metavar="ip_address",
         default="",
+        type=str,
         help="IP address to listen on for XBOX devkits.",
     )
 

@@ -7,6 +7,7 @@ import struct
 import threading
 import time
 from typing import Callable
+from typing import Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,7 @@ class XBOXDiscoverer:
         self,
         listen_ip="",
         xbdm_port=XBDM_PORT,
-        on_discover: Callable[[str, (str, int)], None] = None,
+        on_discover: Callable[[str, Tuple[str, int]], None] = None,
     ):
         self.listen_ip = listen_ip
         self.xbdm_port = xbdm_port
@@ -69,10 +70,12 @@ class XBOXDiscoverer:
         self._running = True
         self._discovery_thread.start()
 
-    def set_on_discover_callback(self, on_discover: Callable[[str, (str, int)], None]):
+    def set_on_discover_callback(
+        self, on_discover: Callable[[str, Tuple[str, int]], None]
+    ):
         self.on_discover = on_discover
 
-    def get_registered_devices(self) -> [str, (str, int)]:
+    def get_registered_devices(self) -> [str, Tuple[str, int]]:
         with self._xbox_registry_lock:
             return list(self._xbox_ip_registry.items())
 
@@ -98,7 +101,9 @@ class XBOXDiscoverer:
     def _thread_main(self):
         broadcast_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         broadcast_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        logger.debug(f"Binding broadcast to {(self.listen_ip, 0)}")
         broadcast_sock.bind((self.listen_ip, 0))
+        print(broadcast_sock.getsockname())
         discovery_packet = NAPPacket.build_discovery_packet()
 
         last_broadcast = time.time() - self.broadcast_interval
@@ -122,6 +127,7 @@ class XBOXDiscoverer:
                 self._parse_response(data, addr)
 
             if broadcast_sock in writable:
+                logger.debug("Sending broadcast.")
                 bytes_sent = broadcast_sock.sendto(
                     discovery_packet.serialize(), ("<broadcast>", self.xbdm_port)
                 )
@@ -130,7 +136,7 @@ class XBOXDiscoverer:
 
         broadcast_sock.close()
 
-    def _parse_response(self, data: bytes, addr: (str, int)) -> None:
+    def _parse_response(self, data: bytes, addr: Tuple[str, int]) -> None:
         reply_packet = NAPPacket()
 
         if len(data) < 2:
