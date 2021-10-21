@@ -43,6 +43,10 @@ class XBDMTransport(ip_transport.IPTransport):
 
         return True
 
+    def close(self):
+        super().close()
+        self._state = self.STATE_INIT
+
     def _send_next_command(self):
         if self._state != self.STATE_CONNECTED or not self._command_queue:
             return

@@ -368,9 +368,10 @@ class Shell:
             "exit": "Terminate the connection and exit.",
             "quit": "Terminate the connection and exit.",
             "q": "Terminate the connection and exit.",
-            "?": "Print help",
-            "help": "Print help",
-            "h": "Print help",
+            "?": "Print help.",
+            "help": "Print help.",
+            "h": "Print help.",
+            "reconnect": "Attempt to reconnect to XBDM.",
         }
 
     def run(self):
@@ -393,6 +394,11 @@ class Shell:
                     execute_command(command, args, self._bridge)
                 except IndexError:
                     print("Missing required parameter.")
+                except ConnectionResetError:
+                    print("Connection closed by XBOX")
+                    if not self._attempt_reconnect():
+                        print("Failed to reconnect")
+                        break
 
             self._bridge.await_empty_queue()
             self._print_prompt()
@@ -406,6 +412,13 @@ class Shell:
             self._print_help(args)
             return self.Result.HANDLED
 
+        if command == "reconnect":
+            if not self._attempt_reconnect():
+                print("Failed to reconnect.")
+            else:
+                print("Connected")
+            return self.Result.HANDLED
+
         if command.startswith("exit") or command.startswith("quit"):
             return self.Result.EXIT_REQUESTED
 
@@ -417,6 +430,13 @@ class Shell:
         print(textwrap.fill(", ".join(commands), 80))
         print("\nShell commands:")
         print(textwrap.fill(", ".join(sorted(self._shell_commands.keys()))))
+
+    def _attempt_reconnect(self) -> bool:
+        self._bridge.reconnect()
+        for i in range(10):
+            if self._bridge.connect_xbdm():
+                return True
+        return False
 
 
 def main(args):
@@ -443,6 +463,8 @@ def main(args):
                 command_args = args.command_args
                 ret = execute_command(command, command_args, bridge)
             bridge.await_empty_queue()
+        except ConnectionResetError:
+            print("Connection closed by XBOX")
         except:
             manager.shutdown()
             raise

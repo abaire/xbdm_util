@@ -13,7 +13,7 @@ class IPTransport:
     def __init__(self, process_callback, name=""):
         self.name = name
         self._sock: Optional[socket.socket] = None
-        self.addr: Tuple[str, int] = None
+        self.addr: Optional[Tuple[str, int]] = None
         self._read_buffer = bytearray()
         self._write_buffer = bytearray()
         self._on_bytes_read = process_callback
@@ -52,6 +52,8 @@ class IPTransport:
         self._sock.close()
         self._sock = None
         self.addr = None
+        self._read_buffer.clear()
+        self._write_buffer.clear()
 
     def send(self, buffer: Union[bytes, bytearray]):
         self._write_buffer.extend(buffer)
