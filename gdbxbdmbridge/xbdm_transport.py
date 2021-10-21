@@ -21,7 +21,6 @@ class XBDMTransport(ip_transport.IPTransport):
 
         self._state = self.STATE_INIT
         self._command_queue = collections.deque()
-        self._dedicated_connections = set()
 
     @property
     def state(self) -> int:
@@ -50,8 +49,13 @@ class XBDMTransport(ip_transport.IPTransport):
     def close(self):
         super().close()
         self._state = self.STATE_INIT
-        for connection in self._dedicated_connections:
-            connection.close()
+
+    def create_notification_server(self, port: int):
+        """Creates a new dedicated notification listener."""
+
+        addr = ("", port)
+        new_transport = notification_transport.NotificationServer(addr, self.name)
+        self._add_sub_connection(new_transport)
 
     def _send_next_command(self):
         if self._state != self.STATE_CONNECTED or not self._command_queue:
@@ -112,8 +116,10 @@ class XBDMTransport(ip_transport.IPTransport):
 
     def _create_dedicated_connection(self, transport_constructor):
         """Passes the current socket to a new dedicated connection handler and reconnects to the remote."""
-        new_conn = transport_constructor(self)
-        self._dedicated_connections.add(new_conn)
+        new_conn = transport_constructor(
+            self, self.name, self._sock, self.addr, self._read_buffer
+        )
+        self._add_sub_connection(new_conn)
         self._sock = socket.create_connection(self.addr)
         self._state = self.STATE_INIT
         self._read_buffer = bytearray()
@@ -144,25 +150,3 @@ class XBDMTransport(ip_transport.IPTransport):
         self._state = self.STATE_CONNECTED
         self._send_next_command()
         return ret
-
-    # Overridden to chain any associated dedicated transports.
-    def select(self, readable, writable, exceptional):
-        super().select(readable, writable, exceptional)
-
-        for connection in self._dedicated_connections:
-            connection.select(readable, writable, exceptional)
-
-    def process(
-        self,
-        readable: [socket.socket],
-        writable: [socket.socket],
-        exceptional: [socket.socket],
-    ) -> bool:
-        closed_connections = set()
-        for connection in self._dedicated_connections:
-            if not connection.process(readable, writable, exceptional):
-                connection.close()
-                closed_connections.add(connection)
-        self._dedicated_connections -= closed_connections
-
-        return super().process(readable, writable, exceptional)

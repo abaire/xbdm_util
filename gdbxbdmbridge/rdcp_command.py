@@ -1531,13 +1531,34 @@ class Notify(_ProcessedCommand):
 
 
 class NotifyAt(_ProcessedCommand):
-    """???"""
+    """Causes the XBDM to open a new notification connection to the given port."""
 
     class Response(_ProcessedResponse):
         pass
 
-    def __init__(self, handler=None):
+    def __init__(
+        self,
+        port: int,
+        addr: Optional[str] = None,
+        drop_flag: bool = False,
+        debug_flag: bool = False,
+        handler=None,
+    ):
         super().__init__("notifyat", response_class=self.Response, handler=handler)
+
+        self.port = port
+        self.address = addr
+        self.drop = drop_flag
+        self.debug = debug_flag
+
+        flags = ""
+        if addr:
+            flags += f' addr="{addr}"'
+        if drop_flag:
+            flags += " drop"
+        elif debug_flag:
+            flags += " debug"
+        self.body = bytes(" port=0x%X%s" % (port, flags), "utf-8")
 
 
 class PBSnap(_ProcessedCommand):

@@ -1,12 +1,18 @@
 import enum
+import logging
+import socket
+
 import sys
 import textwrap
 from typing import Optional
+from typing import Tuple
 
 import natsort
 
 from gdbxbdmbridge import rdcp_command
 from gdbxbdmbridge.bridge import GDBXBDMBridge
+
+logger = logging.getLogger(__name__)
 
 
 def _break(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
@@ -199,6 +205,28 @@ def _no_stop_on(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
     return rdcp_command.NoStopOn(events, handler=print)
 
 
+def _notifyat(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
+    port = int(args[0], 0)
+
+    drop = False
+    debug = False
+    addr = None
+    i = 1
+    while i < len(args):
+        arg = args[i].lower()
+        if arg == "drop":
+            drop = True
+        elif arg == "debug":
+            debug = True
+        elif arg[0] == "a":
+            i += 1
+            addr = args[i]
+
+        i += 1
+
+    return rdcp_command.NotifyAt(port, addr, drop, debug, handler=print)
+
+
 def _set_context(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
     thread_id = int(args[0], 0)
     ext = None
@@ -298,7 +326,7 @@ DISPATCH_TABLE = {
     "modules": lambda _: rdcp_command.Modules(handler=print),
     "nostopon": _no_stop_on,
     "notify": lambda _: rdcp_command.Notify(handler=print),
-    "notifyat": lambda _: rdcp_command.NotifyAt(handler=print),
+    "notifyat": _notifyat,
     # PBSnap
     "performancecounterlist": lambda _: rdcp_command.PerformanceCounterList(
         handler=print
@@ -373,15 +401,32 @@ class Shell:
                 break
 
             command = line[0].lower()
-            args = line[1:]
+            command_args = line[1:]
 
-            result = self._handle_shell_command(command, args)
+            result = self._handle_shell_command(command, command_args)
 
             if result == self.Result.EXIT_REQUESTED:
                 break
+
             if result == self.Result.NOT_HANDLED:
                 try:
-                    execute_command(command, args, self._bridge)
+                    processor = DISPATCH_TABLE.get(command)
+                    if not processor:
+                        print("Invalid command")
+                        return 1
+
+                    cmd = processor(command_args)
+
+                    # Hack: Intercept the command to see if it is a NotifyAt
+                    # and stand up a listener if necessary.
+                    if isinstance(cmd, rdcp_command.NotifyAt):
+                        self._handle_notifyat(
+                            cmd.address, cmd.port, cmd.drop, cmd.debug
+                        )
+
+                    if cmd:
+                        self._bridge.send_rdcp_command(cmd)
+
                 except IndexError:
                     print("Missing required parameter.")
                 except ConnectionResetError:
@@ -390,8 +435,23 @@ class Shell:
                         print("Failed to reconnect")
                         break
 
-            self._bridge.await_empty_queue()
+                self._bridge.await_empty_queue()
+
             self._print_prompt()
+
+    def _handle_notifyat(
+        self, address: Optional[str], port: int, is_drop: bool, is_debug: bool
+    ):
+        del is_debug
+
+        if address:
+            return
+        if is_drop:
+            # TODO: Shut down the notification listener?
+            return
+
+        logger.info(f"Starting notifyat listener at {port}")
+        self._bridge.create_notification_listener(port)
 
     def _print_prompt(self) -> None:
         print("> ", end="")

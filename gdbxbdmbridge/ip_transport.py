@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import socket
 from typing import Optional
@@ -17,6 +19,8 @@ class IPTransport:
         self._read_buffer = bytearray()
         self._write_buffer = bytearray()
         self._on_bytes_read = process_callback
+
+        self._sub_connections = set()
 
     @property
     def connected(self) -> bool:
@@ -46,6 +50,9 @@ class IPTransport:
         self._read_buffer.clear()
         self._write_buffer.clear()
 
+        for connection in self._sub_connections:
+            connection.close()
+
     def send(self, buffer: Union[bytes, bytearray]):
         self._write_buffer.extend(buffer)
 
@@ -55,6 +62,9 @@ class IPTransport:
         writable: [socket.socket],
         exceptional: [socket.socket],
     ) -> None:
+        """Adds this transport's socket(s) to the given `select` arrays."""
+        self._select_sub_connections(readable, writable, exceptional)
+
         if not self._sock:
             return
 
@@ -69,6 +79,9 @@ class IPTransport:
         writable: [socket.socket],
         exceptional: [socket.socket],
     ) -> bool:
+        """Processes this transport's socket(s)."""
+        self._process_sub_connections(readable, writable, exceptional)
+
         if not self._sock:
             return True
 
@@ -102,3 +115,29 @@ class IPTransport:
             self._write_buffer = self._write_buffer[bytes_sent:]
 
         return True
+
+    def _select_sub_connections(
+        self,
+        readable: [socket.socket],
+        writable: [socket.socket],
+        exceptional: [socket.socket],
+    ):
+
+        for connection in self._sub_connections:
+            connection.select(readable, writable, exceptional)
+
+    def _process_sub_connections(
+        self,
+        readable: [socket.socket],
+        writable: [socket.socket],
+        exceptional: [socket.socket],
+    ):
+        closed_connections = set()
+        for connection in self._sub_connections:
+            if not connection.process(readable, writable, exceptional):
+                connection.close()
+                closed_connections.add(connection)
+        self._sub_connections -= closed_connections
+
+    def _add_sub_connection(self, new_transport: IPTransport):
+        self._sub_connections.add(new_transport)

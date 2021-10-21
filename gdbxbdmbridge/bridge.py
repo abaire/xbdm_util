@@ -104,6 +104,12 @@ class GDBXBDMBridge:
             args=(self,),
         ).start()
 
+    def send_rdcp_command(self, cmd: rdcp_command.RDCPCommand) -> bool:
+        return self._xbdm.send_command(cmd)
+
+    def create_notification_listener(self, port: int):
+        self._xbdm.create_notification_server(port)
+
     def _thread_main(self):
         try:
             while self._running:
@@ -179,6 +185,3 @@ class GDBXBDMBridge:
 
     def _process_gdb_data(self, transport: ip_transport.IPTransport):
         pass
-
-    def send_rdcp_command(self, cmd: rdcp_command.RDCPCommand) -> bool:
-        return self._xbdm.send_command(cmd)
