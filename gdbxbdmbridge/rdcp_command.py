@@ -492,7 +492,7 @@ class DebugMode(_ProcessedCommand):
     class Response(_ProcessedResponse):
         pass
 
-    def __init__(self, connect=True, handler=None):
+    def __init__(self, handler=None):
         super().__init__("debugmode", response_class=self.Response, handler=handler)
 
 
@@ -537,15 +537,6 @@ class DirList(_ProcessedCommand):
 
             if not self.ok:
                 return
-
-            # name="AudioConsole"
-            # sizehi=0x0
-            # sizelo=0x0
-            # createhi=0x01d79c1b
-            # createlo=0x3d775600
-            # changehi=0x01d79c1b
-            # changelo=0x7a434d00
-            # directory
 
             entries = response.parse_data_map_array()
             for entry in entries:
