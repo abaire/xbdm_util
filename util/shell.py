@@ -1,11 +1,9 @@
 import enum
 import logging
-import socket
 
 import sys
 import textwrap
 from typing import Optional
-from typing import Tuple
 
 import natsort
 

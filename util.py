@@ -7,7 +7,7 @@ import sys
 from typing import Tuple
 
 from xbdm import connection_manager
-from xbdm import shell
+from util import shell
 
 XBDM_PORT = 731
 logger = logging.getLogger(__name__)
