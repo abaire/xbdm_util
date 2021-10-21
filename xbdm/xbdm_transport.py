@@ -117,7 +117,7 @@ class XBDMTransport(ip_transport.IPTransport):
     def _create_dedicated_connection(self, transport_constructor):
         """Passes the current socket to a new dedicated connection handler and reconnects to the remote."""
         new_conn = transport_constructor(
-            self, self.name, self._sock, self.addr, self._read_buffer
+            self.name, self._sock, self.addr, self._read_buffer
         )
         self._add_sub_connection(new_conn)
         self._sock = socket.create_connection(self.addr)
