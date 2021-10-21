@@ -4,9 +4,9 @@ import struct
 import wx
 from wx.lib import newevent
 
-from gdbxbdmbridge import bridge
-from gdbxbdmbridge import rdcp_command
-from gdbxbdmbridge import rdcp_response
+from xbdm import xbdm_connection
+from xbdm import rdcp_command
+from xbdm import rdcp_response
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +114,9 @@ class XBDMDialog(wx.Dialog):
 
     ConnectedEvent, EVT_CONNECTED = newevent.NewEvent()
 
-    def __init__(self, parent, xbox_bridge: bridge.GDBXBDMBridge, *args, **kw):
+    def __init__(
+        self, parent, xbox_bridge: xbdm_connection.XBDMConnection, *args, **kw
+    ):
         super().__init__(parent, *args, title=xbox_bridge.xbox_info, **kw)
 
         self._panel = wx.Panel(self)

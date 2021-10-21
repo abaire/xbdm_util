@@ -6,8 +6,8 @@ import logging
 import sys
 from typing import Tuple
 
-from gdbxbdmbridge import bridge_manager
-from gdbxbdmbridge import shell
+from xbdm import connection_manager
+from xbdm import shell
 
 XBDM_PORT = 731
 logger = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ def main(args):
 
     logger.debug("Startup")
 
-    manager = bridge_manager.BridgeManager()
+    manager = connection_manager.ConnectionManager()
 
     xbox_ip, xbox_port = args.xbox
     manager.start_bridge(args.discovery_listen_ip, "XBOX", (xbox_ip, xbox_port))

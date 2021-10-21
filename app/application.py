@@ -1,16 +1,16 @@
 import wx
 
-from gdbxbdmbridge import bridge_manager
-from gdbxbdmbridge import discoverer
-from gdbxbdmbridge.gui import main_frame
-from gdbxbdmbridge.gui import xbdm_dialog
+from xbdm import connection_manager
+from xbdm import discoverer
+from app import main_frame
+from app import xbdm_dialog
 
 
 class Application(wx.App):
     def __init__(
         self,
         xbox_discoverer: discoverer.XBOXDiscoverer,
-        manager: bridge_manager.BridgeManager,
+        manager: connection_manager.ConnectionManager,
         *args,
         **kw,
     ):

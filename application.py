@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""See https://xboxdevwiki.net/Xbox_Debug_Monitor and https://sourceware.org/gdb/onlinedocs/gdb/Remote-Protocol.html"""
+"""See https://xboxdevwiki.net/Xbox_Debug_Monitor"""
 
 import argparse
 import logging
@@ -7,8 +7,9 @@ import sys
 import time
 from typing import Tuple
 
-from gdbxbdmbridge import bridge_manager
-from gdbxbdmbridge import discoverer
+import app
+from xbdm import connection_manager
+from xbdm import discoverer
 
 XBDM_PORT = 731
 logger = logging.getLogger(__name__)
@@ -22,20 +23,17 @@ def main(args):
 
     logger.debug("Startup")
 
-    manager = bridge_manager.BridgeManager()
+    manager = connection_manager.ConnectionManager()
     xbox_discoverer = discoverer.XBOXDiscoverer(
         args.discovery_listen_ip, args.discovery_port
     )
 
-    # TODO: Support console-only mode
-    from gdbxbdmbridge import gui
-
-    app = gui.Application(xbox_discoverer, manager)
+    application = app.Application(xbox_discoverer, manager)
 
     def add_bridge(name: str, addr: Tuple[str, int]) -> None:
         manager.start_bridge(args.discovery_listen_ip, name, addr)
-        if app:
-            app.refresh_discovered_devices()
+        if application:
+            application.refresh_discovered_devices()
 
     xbox_discoverer.set_on_discover_callback(add_bridge)
 
@@ -46,8 +44,8 @@ def main(args):
 
     try:
         xbox_discoverer.start()
-        if app:
-            app.MainLoop()
+        if application:
+            application.MainLoop()
         else:
             while True:
                 time.sleep(1000)

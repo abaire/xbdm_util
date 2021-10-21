@@ -9,8 +9,8 @@ from typing import Tuple
 
 import natsort
 
-from gdbxbdmbridge import rdcp_command
-from gdbxbdmbridge.bridge import GDBXBDMBridge
+from xbdm import rdcp_command
+from xbdm.xbdm_connection import XBDMConnection
 
 logger = logging.getLogger(__name__)
 
@@ -360,7 +360,7 @@ DISPATCH_TABLE = {
 }
 
 
-def execute_command(command, command_args, bridge: GDBXBDMBridge) -> int:
+def execute_command(command, command_args, bridge: XBDMConnection) -> int:
     processor = DISPATCH_TABLE.get(command)
     if not processor:
         print("Invalid command")
@@ -379,7 +379,7 @@ class Shell:
         HANDLED = 1
         EXIT_REQUESTED = 2
 
-    def __init__(self, bridge: GDBXBDMBridge):
+    def __init__(self, bridge: XBDMConnection):
         self._bridge = bridge
 
         self._shell_commands = {

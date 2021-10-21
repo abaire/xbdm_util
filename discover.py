@@ -7,7 +7,7 @@ import sys
 import time
 from typing import Tuple
 
-from gdbxbdmbridge import discoverer
+from xbdm import discoverer
 
 XBDM_PORT = 731
 logger = logging.getLogger(__name__)

@@ -2,7 +2,7 @@ import wx
 import wx.grid
 from wx.lib import newevent
 
-from gdbxbdmbridge import bridge_info
+from xbdm import xbdm_connection_info
 
 LaunchXBDMBrowserEvent, EVT_LAUNCH_XBDM_BROWSER = newevent.NewCommandEvent()
 
@@ -18,7 +18,9 @@ class MainFrame(wx.Frame):
 
         self.xbdm_table = _XBDMGrid(self)
 
-    def set_discovered_devices(self, discovered_devices: [bridge_info.BridgeInfo]):
+    def set_discovered_devices(
+        self, discovered_devices: [xbdm_connection_info.ConnectionInfo]
+    ):
         self.xbdm_table.set_rows(sorted(discovered_devices, key=lambda x: x[1]))
 
 
@@ -45,7 +47,7 @@ class _XBDMGrid(wx.grid.Grid):
 
         self.Bind(wx.grid.EVT_GRID_CELL_LEFT_DCLICK, self.OnCellLeftDClick)
 
-    def set_rows(self, rows: [bridge_info.BridgeInfo]):
+    def set_rows(self, rows: [xbdm_connection_info.ConnectionInfo]):
         self.ClearGrid()
         self.InsertRows(numRows=len(rows))
 

@@ -1,4 +1,4 @@
-"""Provides bridging between GDB and XBDM."""
+"""Manages a transport interface to an XBDM."""
 import logging
 import select
 import socket
@@ -16,15 +16,14 @@ SELECT_TIMEOUT_SECS = 0.25
 logger = logging.getLogger(__name__)
 
 
-class GDBXBDMBridge:
-    """Bridges GDB and XBDM protocols."""
+class XBDMConnection:
+    """Manages an XBDM connection."""
 
     def __init__(self, listen_ip: str, xbox_name: str, xbox_addr: Tuple[str, int]):
         self.listen_ip = listen_ip
         self.xbox_name = xbox_name
         self.xbox_addr = xbox_addr
 
-        self._gdb: Optional[ip_transport.IPTransport] = None
         self._xbdm: Optional[xbdm_transport.XBDMTransport] = None
 
         self._listen_sock: Optional[socket.socket] = None
@@ -61,7 +60,6 @@ class GDBXBDMBridge:
             f"Bridging connections to {self.xbox_info} at port {self.listen_addr[1]}"
         )
 
-        self._gdb = ip_transport.IPTransport(self._process_gdb_data, "GDB")
         self._xbdm = xbdm_transport.XBDMTransport("XBDM")
 
         self._running = True
@@ -72,10 +70,6 @@ class GDBXBDMBridge:
 
     def _close(self):
         self._running = False
-        self._close_listen_socket()
-
-        if self._gdb:
-            self._gdb.close()
 
         if self._xbdm:
             self._xbdm.close()
@@ -117,58 +111,26 @@ class GDBXBDMBridge:
                 writable = []
                 exceptional = [self._listen_sock]
 
-                self._gdb.select(readable, writable, exceptional)
                 self._xbdm.select(readable, writable, exceptional)
 
                 readable, writable, exceptional = select.select(
                     readable, writable, exceptional, SELECT_TIMEOUT_SECS
                 )
 
-                if not self._gdb.process(readable, writable, exceptional):
-                    self._running = False
-                    return
-
                 if not self._xbdm.process(readable, writable, exceptional):
                     self._running = False
                     break
 
-                if self._listen_sock in readable and not self._accept_gdb_connection():
-                    self._running = False
-                    break
         except ConnectionResetError:
             self._running = False
 
-        logger.debug(f"Shutting down bridge for {self.xbox_info}")
+        logger.debug(f"Shutting down connection for {self.xbox_info}")
         self._close()
 
     def await_empty_queue(self) -> None:
         # TODO: Use condition variables instead of spinning.
         while self._xbdm.has_buffered_data:
             time.sleep(0.05)
-
-    def _accept_gdb_connection(self):
-        remote, remote_addr = self._listen_sock.accept()
-
-        if self._gdb.connected:
-            logger.warning(
-                f"Denying GDB connection from {remote_addr} as socket is already connected."
-            )
-            remote.close()
-            return True
-
-        logger.info(f"Accepted GDB connection from {remote_addr}")
-        remote.setblocking(False)
-
-        self._gdb.set_connection(remote, remote_addr)
-
-        if not self._connect_to_xbdm():
-            self._close()
-            return False
-        return True
-
-    def _close_listen_socket(self):
-        logger.info(f"Closing GDB bridge to {self.xbox_info} at {self.listen_addr[1]}")
-        self._listen_sock.close()
 
     def _connect_to_xbdm(self, timeout_seconds: int = 15) -> bool:
         logger.info(f"Connecting to XBDM {self.xbox_addr}")
@@ -182,6 +144,3 @@ class GDBXBDMBridge:
         sock.setblocking(False)
         self._xbdm.set_connection(sock, self.xbox_addr)
         return True
-
-    def _process_gdb_data(self, transport: ip_transport.IPTransport):
-        pass
