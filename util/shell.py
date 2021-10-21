@@ -1,3 +1,4 @@
+import binascii
 import enum
 import logging
 
@@ -184,7 +185,7 @@ def _magic_boot(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
 
     for arg in args[1:]:
         arg = arg.lower()
-        if arg[0] == "w":
+        if arg[0] == "w" or arg[0] == "d":
             enable_wait_for_debugger = True
         elif arg[0] == "c":
             enable_cold = True
@@ -232,6 +233,15 @@ def _set_context(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
         ext = int(args[1], 0)
 
     return rdcp_command.SetContext(thread_id, ext, handler=print)
+
+
+def _set_mem(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
+    """addr:int hexadecimal_string: str"""
+    addr = int(args[0], 0)
+
+    value = binascii.unhexlify("".join(args[1:]))
+
+    return rdcp_command.SetMem(addr, value, handler=print)
 
 
 def _reboot(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
@@ -340,7 +350,7 @@ DISPATCH_TABLE = {
     # SetConfig
     "setcontext": _set_context,
     # SetFileAttributes
-    # SetMem
+    "setmem": _set_mem,
     # SetSystemTime
     "stop": lambda _: rdcp_command.Stop(handler=print),
     "stopon": lambda args: rdcp_command.StopOn(int(args[0], 0), handler=print),
