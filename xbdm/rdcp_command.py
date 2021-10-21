@@ -1197,8 +1197,9 @@ class KernelDebug(_ProcessedCommand):
 
     class Mode(enum.Enum):
         ENABLE = b" enable"
-        DISABLE_EXCEPT = b" disable except"
-        DISABLE_EXCEPT_IF = b" disable exceptif"
+        DISABLE = b" disable"
+        EXCEPT = b" except"
+        EXCEPT_IF = b" exceptif"
 
     class Response(_ProcessedRawBodyResponse):
         pass

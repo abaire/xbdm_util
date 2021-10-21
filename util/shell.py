@@ -179,23 +179,17 @@ def _get_mem(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
 
 
 def _kernel_debug(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
-    if not args or args[0] == "+":
-        return rdcp_command.KernelDebug(
-            rdcp_command.KernelDebug.Mode.ENABLE, handler=print
-        )
+    mode = rdcp_command.KernelDebug.Mode.ENABLE
+    if args:
+        args[0] = args[0].lower()
+        if args[0] == "disable":
+            mode = rdcp_command.KernelDebug.Mode.DISABLE
+        elif args[0] == "except":
+            mode = rdcp_command.KernelDebug.Mode.EXCEPT
+        elif args[0] == "exceptif":
+            mode = rdcp_command.KernelDebug.Mode.EXCEPT_IF
 
-    if args[0] == "-":
-        return rdcp_command.KernelDebug(
-            rdcp_command.KernelDebug.Mode.DISABLE_EXCEPT, handler=print
-        )
-
-    if args[0] == "-?":
-        return rdcp_command.KernelDebug(
-            rdcp_command.KernelDebug.Mode.DISABLE_EXCEPT_IF, handler=print
-        )
-
-    print("Invalid mode. Must be one of [+, -, -?]")
-    return None
+    return rdcp_command.KernelDebug(mode, handler=print)
 
 
 def _magic_boot(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
