@@ -9,6 +9,8 @@ import sys
 from typing import Optional
 from typing import Tuple
 
+import natsort
+
 from gdbxbdmbridge import bridge_manager
 from gdbxbdmbridge import rdcp_command
 from gdbxbdmbridge.bridge import GDBXBDMBridge
@@ -96,6 +98,40 @@ def _debug_options(args) -> Optional[rdcp_command.RDCPCommand]:
 def _debugger(args) -> Optional[rdcp_command.RDCPCommand]:
     connect = not args or args[0].lower() != "d"
     return rdcp_command.Debugger(connect, handler=print)
+
+
+def _dirlist(args) -> Optional[rdcp_command.RDCPCommand]:
+    def _PrintDirList(response: rdcp_command.DirList.Response):
+        if not response.ok:
+            print(response.pretty_message)
+            return
+
+        directories = []
+        files = []
+        for entry in response.entries:
+            if entry["directory"]:
+                directories.append(entry)
+            else:
+                files.append(entry)
+
+        directories = natsort.natsorted(
+            directories, key=lambda x: x["name"], alg=natsort.ns.IGNORECASE
+        )
+        files = natsort.natsorted(
+            files, key=lambda x: x["name"], alg=natsort.ns.IGNORECASE
+        )
+
+        for entry in directories:
+            print(f"           {entry['name']}\\")
+
+        for entry in files:
+            print("%10d %s" % (entry["filesize"], entry["name"]))
+
+    # Prevent access denied errors when trying to list the base of a drive path.
+    if args[0] and args[0][-1] == ":":
+        args[0] += "\\"
+
+    return rdcp_command.DirList(args[0], handler=_PrintDirList)
 
 
 def _get_context(args) -> Optional[rdcp_command.RDCPCommand]:
@@ -229,7 +265,7 @@ _DISPATCH_TABLE = {
     "debugger": _debugger,
     "debugmode": lambda _: rdcp_command.DebugMode(handler=print),
     "rm": lambda args: rdcp_command.Delete(args[0], args[0][-1] == "/", handler=print),
-    "ls": lambda args: rdcp_command.DirList(args[0], handler=print),
+    "ls": _dirlist,
     "dmversion": lambda _: rdcp_command.DMVersion(handler=print),
     "df": lambda args: rdcp_command.DriveFreeSpace(args[0][0], handler=print),
     "drivelist": lambda _: rdcp_command.DriveList(handler=print),
@@ -263,7 +299,7 @@ _DISPATCH_TABLE = {
     "irtsweep": lambda _: rdcp_command.IRTSweep(handler=print),
     "kd": _kernel_debug,
     # LOP
-    "boot": _magic_boot,
+    "run": _magic_boot,
     # MemTrack
     "memorymap": lambda _: rdcp_command.MemoryMapGlobal(handler=print),
     "mkdir": lambda args: rdcp_command.Mkdir(args[0], handler=print),
@@ -328,6 +364,15 @@ class Shell:
     def __init__(self, bridge: GDBXBDMBridge):
         self._bridge = bridge
 
+        self._shell_commands = {
+            "exit": "Terminate the connection and exit.",
+            "quit": "Terminate the connection and exit.",
+            "q": "Terminate the connection and exit.",
+            "?": "Print help",
+            "help": "Print help",
+            "h": "Print help",
+        }
+
     def run(self):
         self._print_prompt()
 
@@ -344,24 +389,34 @@ class Shell:
             if result == self.Result.EXIT_REQUESTED:
                 break
             if result == self.Result.NOT_HANDLED:
-                execute_command(command, args, self._bridge)
+                try:
+                    execute_command(command, args, self._bridge)
+                except IndexError:
+                    print("Missing required parameter.")
+
+            self._bridge.await_empty_queue()
             self._print_prompt()
 
     def _print_prompt(self) -> None:
         print("> ", end="")
+        sys.stdout.flush()
 
     def _handle_shell_command(self, command: str, args: [str]) -> Result:
-        del args
-
-        if not command or command.startswith("exit") or command.startswith("quit"):
-            return self.Result.EXIT_REQUESTED
-
-        if command == "help" or command == "?" or command == "h":
-            commands = [k for k, v in _DISPATCH_TABLE.items() if v]
-            print(textwrap.fill(", ".join(commands), 80))
+        if not command or command == "help" or command == "?" or command == "h":
+            self._print_help(args)
             return self.Result.HANDLED
 
+        if command.startswith("exit") or command.startswith("quit"):
+            return self.Result.EXIT_REQUESTED
+
         return self.Result.NOT_HANDLED
+
+    def _print_help(self, _args: [str]):
+        commands = sorted([k for k, v in _DISPATCH_TABLE.items() if v])
+        print("XBDM commands:")
+        print(textwrap.fill(", ".join(commands), 80))
+        print("\nShell commands:")
+        print(textwrap.fill(", ".join(sorted(self._shell_commands.keys()))))
 
 
 def main(args):

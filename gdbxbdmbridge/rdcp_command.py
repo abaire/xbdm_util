@@ -205,33 +205,39 @@ class _ProcessedCommand(RDCPCommand):
 
 class _ProcessedResponse:
     def __init__(self, response: rdcp_response.RDCPResponse):
-        self._status = response.status
-        self._message = response.message
+        self.status = response.status
+        self.message = response.message
 
     @property
     def ok(self):
-        return self._status == rdcp_response.RDCPResponse.STATUS_OK
+        return self.status == rdcp_response.RDCPResponse.STATUS_OK
 
     @property
     def _body_str(self) -> str:
         return ""
 
-    def __str__(self):
-        if self._message:
+    @property
+    def pretty_message(self) -> Optional[str]:
+        if self.ok:
+            return None
+
+        if self.message:
             try:
-                message = self._message.decode("utf-8")
+                message = self.message.decode("utf-8")
             except UnicodeDecodeError:
                 message = "<Non unicode data>"
         else:
             message = rdcp_response.RDCPResponse.STATUS_CODES.get(
-                self._status, "??INVALID??"
+                self.status, "??INVALID??"
             )
+        return f"{self.status}: {message}"
 
+    def __str__(self):
         body = self._body_str
         if body:
             body = f" {body}"
 
-        ret = f"{self.__class__.__qualname__}::{self._status}:{message}{body}"
+        ret = f"{self.__class__.__qualname__}::{self.pretty_message} {body}"
         return ret
 
 
@@ -558,7 +564,7 @@ class DirList(_ProcessedCommand):
 
         @property
         def ok(self):
-            return self._status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+            return self.status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
 
         @property
         def _body_str(self) -> str:
@@ -619,7 +625,7 @@ class DriveFreeSpace(_ProcessedCommand):
 
         @property
         def ok(self):
-            return self._status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+            return self.status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
 
         @property
         def _body_str(self) -> str:
@@ -716,7 +722,7 @@ class GetD3DState(_ProcessedCommand):
 
         @property
         def ok(self):
-            return self._status == rdcp_response.RDCPResponse.STATUS_BINARY_RESPONSE
+            return self.status == rdcp_response.RDCPResponse.STATUS_BINARY_RESPONSE
 
         @property
         def _body_str(self) -> str:
@@ -749,7 +755,7 @@ class GetExtContext(_ProcessedCommand):
 
         @property
         def ok(self):
-            return self._status == rdcp_response.RDCPResponse.STATUS_BINARY_RESPONSE
+            return self.status == rdcp_response.RDCPResponse.STATUS_BINARY_RESPONSE
 
         @property
         def _body_str(self) -> str:
@@ -781,7 +787,7 @@ class GetFile(_ProcessedCommand):
 
         @property
         def ok(self):
-            return self._status == rdcp_response.RDCPResponse.STATUS_BINARY_RESPONSE
+            return self.status == rdcp_response.RDCPResponse.STATUS_BINARY_RESPONSE
 
         @property
         def _body_str(self) -> str:
@@ -845,7 +851,7 @@ class GetFileAttributes(_ProcessedCommand):
 
         @property
         def ok(self):
-            return self._status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+            return self.status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
 
         @property
         def _body_str(self) -> str:
@@ -877,7 +883,7 @@ class GetGamma(_ProcessedCommand):
 
         @property
         def ok(self):
-            return self._status == rdcp_response.RDCPResponse.STATUS_BINARY_RESPONSE
+            return self.status == rdcp_response.RDCPResponse.STATUS_BINARY_RESPONSE
 
         @property
         def _body_str(self) -> str:
@@ -905,7 +911,7 @@ class GetMem(_ProcessedCommand):
 
         @property
         def ok(self):
-            return self._status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+            return self.status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
 
         @property
         def _body_str(self) -> str:
@@ -938,7 +944,7 @@ class GetMemBinary(_ProcessedCommand):
 
         @property
         def ok(self):
-            return self._status == rdcp_response.RDCPResponse.STATUS_BINARY_RESPONSE
+            return self.status == rdcp_response.RDCPResponse.STATUS_BINARY_RESPONSE
 
         @property
         def _body_str(self) -> str:
@@ -1006,7 +1012,7 @@ class GetChecksum(_ProcessedCommand):
 
         @property
         def ok(self):
-            return self._status == rdcp_response.RDCPResponse.STATUS_BINARY_RESPONSE
+            return self.status == rdcp_response.RDCPResponse.STATUS_BINARY_RESPONSE
 
         @property
         def _body_str(self) -> str:
@@ -1339,7 +1345,7 @@ class MemoryMapGlobal(_ProcessedCommand):
 
         @property
         def ok(self):
-            return self._status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+            return self.status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
 
         @property
         def _body_str(self) -> str:
@@ -1410,7 +1416,7 @@ class ModSections(_ProcessedCommand):
 
         @property
         def ok(self):
-            return self._status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+            return self.status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
 
         @property
         def _body_str(self) -> str:
@@ -1460,7 +1466,7 @@ class Modules(_ProcessedCommand):
 
         @property
         def ok(self):
-            return self._status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+            return self.status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
 
         @property
         def _body_str(self) -> str:
@@ -1565,7 +1571,7 @@ class PerformanceCounterList(_ProcessedCommand):
 
         @property
         def ok(self):
-            return self._status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+            return self.status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
 
         @property
         def _body_str(self) -> str:
@@ -1683,7 +1689,7 @@ class Screenshot(_ProcessedCommand):
 
         @property
         def ok(self):
-            return self._status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+            return self.status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
 
         @property
         def _body_str(self) -> str:
@@ -1710,7 +1716,7 @@ class SendFile(_ProcessedCommand):
 
         @property
         def ok(self):
-            return self._status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+            return self.status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
 
         @property
         def _body_str(self) -> str:
@@ -1925,7 +1931,7 @@ class ThreadInfo(_ProcessedCommand):
 
         @property
         def ok(self):
-            return self._status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+            return self.status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
 
         @property
         def _body_str(self) -> str:
@@ -2040,7 +2046,7 @@ class WalkMem(_ProcessedCommand):
 
         @property
         def ok(self):
-            return self._status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+            return self.status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
 
         @property
         def _body_str(self) -> str:
@@ -2067,7 +2073,7 @@ class WriteFile(_ProcessedCommand):
 
         @property
         def ok(self):
-            return self._status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+            return self.status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
 
         @property
         def _body_str(self) -> str:
@@ -2101,7 +2107,7 @@ class XBEInfo(_ProcessedCommand):
 
         @property
         def ok(self):
-            return self._status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+            return self.status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
 
         @property
         def _body_str(self) -> str:
@@ -2134,7 +2140,7 @@ class XTLInfo(_ProcessedCommand):
 
         @property
         def ok(self):
-            return self._status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+            return self.status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
 
         @property
         def _body_str(self) -> str:
