@@ -14,6 +14,13 @@ from xbdm.xbdm_connection import XBDMConnection
 logger = logging.getLogger(__name__)
 
 
+def _parse_address(addr_str: str) -> int:
+    try:
+        return int(eval(addr_str))
+    except:
+        return 0
+
+
 def _break(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
     if not args:
         return rdcp_command.BreakNow(handler=print)
@@ -33,11 +40,11 @@ def _break(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
         mode = mode[1:]
 
     if mode == "addr" or mode == "address" or mode == "a":
-        address = int(args[1], 0)
+        address = _parse_address(args[1])
         return rdcp_command.BreakAtAddress(address, clear, handler=print)
 
     if mode == "r" or mode == "read":
-        address = int(args[1], 0)
+        address = _parse_address(args[1])
         if len(args) > 2:
             size = int(args[2], 0)
         else:
@@ -45,7 +52,7 @@ def _break(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
         return rdcp_command.BreakOnRead(address, size, clear, handler=print)
 
     if mode == "w" or mode == "write":
-        address = int(args[1], 0)
+        address = _parse_address(args[1])
         if len(args) > 2:
             size = int(args[2], 0)
         else:
@@ -53,7 +60,7 @@ def _break(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
         return rdcp_command.BreakOnWrite(address, size, clear, handler=print)
 
     if mode == "exec" or mode == "execute" or mode == "e":
-        address = int(args[1], 0)
+        address = _parse_address(args[1])
         if len(args) > 2:
             size = int(args[2], 0)
         else:
@@ -157,6 +164,11 @@ def _get_context(args) -> Optional[rdcp_command.RDCPCommand]:
     )
 
 
+def _get_mem(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
+    address = _parse_address(args[0])
+    return rdcp_command.GetMem(address, int(args[1], 0), handler=print)
+
+
 def _kernel_debug(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
     if not args or args[0] == "+":
         return rdcp_command.KernelDebug(
@@ -254,7 +266,7 @@ def _set_context(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
 
 def _set_mem(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
     """addr:int hexadecimal_string: str"""
-    addr = int(args[0], 0)
+    addr = _parse_address(args[0])
 
     value = binascii.unhexlify("".join(args[1:]))
 
@@ -321,9 +333,7 @@ DISPATCH_TABLE = {
     # GetFile
     "getfileattr": lambda args: rdcp_command.GetFileAttributes(args[0], handler=print),
     "getgamma": lambda _: rdcp_command.GetGamma(handler=print),
-    "getmem": lambda args: rdcp_command.GetMem(
-        int(args[0], 0), int(args[1], 0), handler=print
-    ),
+    "getmem": _get_mem,
     # GetMemBinary
     "getpalette": lambda args: rdcp_command.GetPalette(args[0], handler=print),
     "getpid": lambda _: rdcp_command.GetProcessID(handler=print),
