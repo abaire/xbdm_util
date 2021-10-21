@@ -2,6 +2,8 @@
 import logging
 import struct
 import sys
+from typing import Optional
+from typing import Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -166,10 +168,13 @@ class RDCPResponse:
         """Processes self.data as a list of lines."""
         return parse_array(self.data)
 
-    def parse_hex_data(self) -> (str, bytearray):
+    def parse_hex_data(self) -> Tuple[str, Optional[bytearray]]:
         """Processes self.data as a chunk of hex values."""
         lines = self.parse_multiline()
         printable_value = (b"".join(lines)).decode("utf-8")
+        if "?" in printable_value:
+            return printable_value, None
+
         return printable_value, bytearray.fromhex(printable_value)
 
     def parse_data_map_array(self) -> [bytes, bytes]:

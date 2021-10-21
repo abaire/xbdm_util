@@ -195,6 +195,23 @@ def _magic_boot(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
     )
 
 
+def _modules(_args) -> Optional[rdcp_command.RDCPCommand]:
+    def _print_modules(response: rdcp_command.Modules.Response):
+        response.modules.sort(key=lambda x: x["name"])
+        for module in response.modules:
+            flags = ""
+            for flag in {"tls", "xbe"}:
+                if module.get(flag):
+                    flags += " %s" % flag
+
+            print(
+                "Name: %-18s Base address: 0x%08X  size: %8d%s"
+                % (module["name"], module["base_address"], module["size"], flags)
+            )
+
+    return rdcp_command.Modules(handler=_print_modules)
+
+
 def _no_stop_on(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
     if args:
         events = int(args[0], 0)
@@ -260,7 +277,7 @@ def _reboot(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
 
 
 def _walk_memory(_args) -> Optional[rdcp_command.RDCPCommand]:
-    def _PrintMemoryWalk(response: rdcp_command.WalkMem.Response):
+    def _print_memory_walk(response: rdcp_command.WalkMem.Response):
         response.regions.sort(key=lambda x: x["base_address"])
         for region in response.regions:
             print(
@@ -272,7 +289,7 @@ def _walk_memory(_args) -> Optional[rdcp_command.RDCPCommand]:
                 )
             )
 
-    return rdcp_command.WalkMem(handler=_PrintMemoryWalk)
+    return rdcp_command.WalkMem(handler=_print_memory_walk)
 
 
 def _xbe_info(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
@@ -331,7 +348,7 @@ DISPATCH_TABLE = {
     "mkdir": lambda args: rdcp_command.Mkdir(args[0], handler=print),
     "modlongname": lambda args: rdcp_command.ModLongName(args[0], handler=print),
     "modsections": lambda args: rdcp_command.ModSections(args[0], handler=print),
-    "modules": lambda _: rdcp_command.Modules(handler=print),
+    "modules": _modules,
     "nostopon": _no_stop_on,
     "notify": lambda _: rdcp_command.Notify(handler=print),
     "notifyat": _notifyat,
@@ -421,19 +438,18 @@ class Shell:
                     processor = DISPATCH_TABLE.get(command)
                     if not processor:
                         print("Invalid command")
-                        return 1
+                    else:
+                        cmd = processor(command_args)
 
-                    cmd = processor(command_args)
+                        # Hack: Intercept the command to see if it is a NotifyAt
+                        # and stand up a listener if necessary.
+                        if isinstance(cmd, rdcp_command.NotifyAt):
+                            self._handle_notifyat(
+                                cmd.address, cmd.port, cmd.drop, cmd.debug
+                            )
 
-                    # Hack: Intercept the command to see if it is a NotifyAt
-                    # and stand up a listener if necessary.
-                    if isinstance(cmd, rdcp_command.NotifyAt):
-                        self._handle_notifyat(
-                            cmd.address, cmd.port, cmd.drop, cmd.debug
-                        )
-
-                    if cmd:
-                        self._bridge.send_rdcp_command(cmd)
+                        if cmd:
+                            self._bridge.send_rdcp_command(cmd)
 
                 except IndexError:
                     print("Missing required parameter.")
