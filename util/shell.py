@@ -22,18 +22,21 @@ def _parse_address(addr_str: str) -> int:
 
 
 def _break(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
+    def _print_with_message(response):
+        print(f"{response}\n{response.raw_body.decode('utf-8')}")
+
     if not args:
-        return rdcp_command.BreakNow(handler=print)
+        return rdcp_command.BreakNow(handler=_print_with_message)
 
     mode = args[0].lower()
     if mode == "now":
-        return rdcp_command.BreakNow(handler=print)
+        return rdcp_command.BreakNow(handler=_print_with_message)
 
     if mode == "start":
-        return rdcp_command.BreakAtStart(handler=print)
+        return rdcp_command.BreakAtStart(handler=_print_with_message)
 
     if mode == "clearall":
-        return rdcp_command.BreakClearAll(handler=print)
+        return rdcp_command.BreakClearAll(handler=_print_with_message)
 
     clear = False
     if mode[0] == "-":
@@ -41,7 +44,7 @@ def _break(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
 
     if mode == "addr" or mode == "address" or mode == "a":
         address = _parse_address(args[1])
-        return rdcp_command.BreakAtAddress(address, clear, handler=print)
+        return rdcp_command.BreakAtAddress(address, clear, handler=_print_with_message)
 
     if mode == "r" or mode == "read":
         address = _parse_address(args[1])
@@ -49,7 +52,9 @@ def _break(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
             size = int(args[2], 0)
         else:
             size = 0
-        return rdcp_command.BreakOnRead(address, size, clear, handler=print)
+        return rdcp_command.BreakOnRead(
+            address, size, clear, handler=_print_with_message
+        )
 
     if mode == "w" or mode == "write":
         address = _parse_address(args[1])
@@ -57,7 +62,9 @@ def _break(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
             size = int(args[2], 0)
         else:
             size = 0
-        return rdcp_command.BreakOnWrite(address, size, clear, handler=print)
+        return rdcp_command.BreakOnWrite(
+            address, size, clear, handler=_print_with_message
+        )
 
     if mode == "exec" or mode == "execute" or mode == "e":
         address = _parse_address(args[1])
@@ -65,7 +72,9 @@ def _break(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
             size = int(args[2], 0)
         else:
             size = 0
-        return rdcp_command.BreakOnExecute(address, size, clear, handler=print)
+        return rdcp_command.BreakOnExecute(
+            address, size, clear, handler=_print_with_message
+        )
 
     print("Invalid mode")
     return None

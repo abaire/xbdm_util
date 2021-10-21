@@ -212,6 +212,7 @@ class _ProcessedResponse:
     def __init__(self, response: rdcp_response.RDCPResponse):
         self.status = response.status
         self.message = response.message
+        self.raw_body = response.data
 
     @property
     def ok(self):
