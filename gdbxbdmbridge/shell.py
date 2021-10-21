@@ -251,7 +251,7 @@ DISPATCH_TABLE = {
     "altaddr": lambda _: rdcp_command.AltAddr(handler=print),
     "break": _break,
     "continue": _continue,
-    "dbgoptions": _debug_options,
+    "debugoptions": _debug_options,
     "debugger": _debugger,
     "debugmode": lambda _: rdcp_command.DebugMode(handler=print),
     "rm": lambda args: rdcp_command.Delete(args[0], args[0][-1] == "/", handler=print),
@@ -297,8 +297,8 @@ DISPATCH_TABLE = {
     "modsections": lambda args: rdcp_command.ModSections(args[0], handler=print),
     "modules": lambda _: rdcp_command.Modules(handler=print),
     "nostopon": _no_stop_on,
-    # Notify
-    # NotifyAt
+    "notify": lambda _: rdcp_command.Notify(handler=print),
+    "notifyat": lambda _: rdcp_command.NotifyAt(handler=print),
     # PBSnap
     "performancecounterlist": lambda _: rdcp_command.PerformanceCounterList(
         handler=print

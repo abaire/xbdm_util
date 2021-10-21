@@ -27,20 +27,11 @@ class IPTransport:
         return self._read_buffer
 
     def shift_read_buffer(self, size):
-        self._read_buffer = self._read_buffer[size:]
+        self._read_buffer = bytearray(self._read_buffer[size:])
 
     def set_connection(self, sock, addr):
         self._sock = sock
         self.addr = addr
-
-    def select(self, readable, writable, exceptional):
-        if not self._sock:
-            return
-
-        readable.append(self._sock)
-        exceptional.append(self._sock)
-        if self._write_buffer:
-            writable.append(self._sock)
 
     def close(self):
         if not self._sock:
@@ -57,6 +48,20 @@ class IPTransport:
 
     def send(self, buffer: Union[bytes, bytearray]):
         self._write_buffer.extend(buffer)
+
+    def select(
+        self,
+        readable: [socket.socket],
+        writable: [socket.socket],
+        exceptional: [socket.socket],
+    ) -> None:
+        if not self._sock:
+            return
+
+        readable.append(self._sock)
+        exceptional.append(self._sock)
+        if self._write_buffer:
+            writable.append(self._sock)
 
     def process(
         self,

@@ -120,6 +120,7 @@ class RDCPCommand:
         self._response_handler = response_handler
         self._binary_response_length = 0
         self._binary_payload = None
+        self._dedicate_notification_mode = False
 
         # if self.command not in self.COMMANDS:
         #     logger.error(f"Invalid command {command}")
@@ -146,6 +147,10 @@ class RDCPCommand:
         if self._binary_response_length:
             return self._binary_response_length
         return 0
+
+    @property
+    def dedicate_notification_mode(self) -> bool:
+        return self._dedicate_notification_mode
 
     def serialize(self) -> bytes:
         if not self.command:
@@ -1522,10 +1527,7 @@ class Notify(_ProcessedCommand):
 
     def __init__(self, handler=None):
         super().__init__("notify", response_class=self.Response, handler=handler)
-
-        # TODO: Convert the channel parser to notification mode.
-        # Looks like notifications are sent w/ '\r\n' termination but no prefix.
-        # NotifyAt can be sent on the channel, triggering a response.
+        self._dedicate_notification_mode = True
 
 
 class NotifyAt(_ProcessedCommand):

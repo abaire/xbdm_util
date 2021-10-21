@@ -28,20 +28,24 @@ def main(args):
     bridge = manager.get_bridge((xbox_ip, xbox_port))
 
     ret = 0
-    if bridge.can_process_xbdm_commands or bridge.connect_xbdm():
-        try:
-            command = args.command.lower()
-            if command == "shell":
-                shell.Shell(bridge).run()
-            else:
-                command_args = args.command_args
-                ret = shell.execute_command(command, command_args, bridge)
-            bridge.await_empty_queue()
-        except ConnectionResetError:
-            print("Connection closed by XBOX")
-        except:
-            manager.shutdown()
-            raise
+    if not (bridge.can_process_xbdm_commands or bridge.connect_xbdm()):
+        print("Failed to communicate with XBOX")
+        manager.shutdown()
+        return 1
+
+    try:
+        command = args.command.lower()
+        if command == "shell":
+            shell.Shell(bridge).run()
+        else:
+            command_args = args.command_args
+            ret = shell.execute_command(command, command_args, bridge)
+        bridge.await_empty_queue()
+    except ConnectionResetError:
+        print("Connection closed by XBOX")
+    except:
+        manager.shutdown()
+        raise
 
     manager.shutdown()
     return ret

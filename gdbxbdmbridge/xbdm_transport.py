@@ -1,7 +1,10 @@
 import collections
 import logging
+import socket
+from typing import Tuple
 
 from . import ip_transport
+from . import notification_transport
 from . import rdcp_command
 from . import rdcp_response
 
@@ -18,6 +21,7 @@ class XBDMTransport(ip_transport.IPTransport):
 
         self._state = self.STATE_INIT
         self._command_queue = collections.deque()
+        self._dedicated_connections = set()
 
     @property
     def state(self) -> int:
@@ -46,6 +50,8 @@ class XBDMTransport(ip_transport.IPTransport):
     def close(self):
         super().close()
         self._state = self.STATE_INIT
+        for connection in self._dedicated_connections:
+            connection.close()
 
     def _send_next_command(self):
         if self._state != self.STATE_CONNECTED or not self._command_queue:
@@ -58,7 +64,7 @@ class XBDMTransport(ip_transport.IPTransport):
     def _process_xbdm_data(self, transport: ip_transport.IPTransport):
         response = rdcp_response.RDCPResponse()
 
-        def parse_response():
+        def parse_response() -> Tuple[rdcp_command.RDCPCommand, int]:
             current_command = None
             if self._command_queue:
                 current_command = self._command_queue[0]
@@ -76,7 +82,6 @@ class XBDMTransport(ip_transport.IPTransport):
         current_command, bytes_processed = parse_response()
 
         while bytes_processed > 0:
-
             # If the response expects binary data, insert a new RDCPBinaryPayload instance for the command just after the current command.
             if response.status == response.STATUS_SEND_BINARY_DATA:
                 payload = rdcp_command.RDCPBinaryPayload(current_command)
@@ -89,11 +94,29 @@ class XBDMTransport(ip_transport.IPTransport):
                 break
             transport.shift_read_buffer(bytes_processed)
 
+            if response.status == response.STATUS_CONNECTION_DEDICATED:
+                if not current_command.dedicate_notification_mode:
+                    logger.error("Unexpected request to dedicate connection.")
+                    # TODO: Shut down the connection and start a new one?
+                else:
+                    self._create_dedicated_connection(
+                        notification_transport.NotificationTransport
+                    )
+                    break
+
             current_command, bytes_processed = parse_response()
 
         logger.debug(
             f"After processing: [{len(transport.read_buffer)}] {transport.read_buffer}"
         )
+
+    def _create_dedicated_connection(self, transport_constructor):
+        """Passes the current socket to a new dedicated connection handler and reconnects to the remote."""
+        new_conn = transport_constructor(self)
+        self._dedicated_connections.add(new_conn)
+        self._sock = socket.create_connection(self.addr)
+        self._state = self.STATE_INIT
+        self._read_buffer = bytearray()
 
     def _process_rdcp_command(self, response: rdcp_response.RDCPResponse) -> bool:
         """Processes a single RDCPResponse. Return True to close the connection"""
@@ -121,3 +144,25 @@ class XBDMTransport(ip_transport.IPTransport):
         self._state = self.STATE_CONNECTED
         self._send_next_command()
         return ret
+
+    # Overridden to chain any associated dedicated transports.
+    def select(self, readable, writable, exceptional):
+        super().select(readable, writable, exceptional)
+
+        for connection in self._dedicated_connections:
+            connection.select(readable, writable, exceptional)
+
+    def process(
+        self,
+        readable: [socket.socket],
+        writable: [socket.socket],
+        exceptional: [socket.socket],
+    ) -> bool:
+        closed_connections = set()
+        for connection in self._dedicated_connections:
+            if not connection.process(readable, writable, exceptional):
+                connection.close()
+                closed_connections.add(connection)
+        self._dedicated_connections -= closed_connections
+
+        return super().process(readable, writable, exceptional)
