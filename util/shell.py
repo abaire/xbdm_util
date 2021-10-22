@@ -112,6 +112,18 @@ def _debugger(args) -> Optional[rdcp_command.RDCPCommand]:
     return rdcp_command.Debugger(connect, handler=print)
 
 
+def _dedicate(args) -> Optional[rdcp_command.RDCPCommand]:
+    global_enable = None
+    handler_name = None
+
+    if args[0].lower() == "global":
+        global_enable = True
+    else:
+        handler_name = args[0]
+
+    return rdcp_command.Dedicate(global_enable, handler_name, handler=print)
+
+
 def _dirlist(args) -> Optional[rdcp_command.RDCPCommand]:
     def _print_dir_list(response: rdcp_command.DirList.Response):
         if not response.ok:
@@ -343,6 +355,7 @@ DISPATCH_TABLE = {
     "debugoptions": _debug_options,
     "debugger": _debugger,
     "debugmode": lambda _: rdcp_command.DebugMode(handler=print),
+    "dedicate": _dedicate,
     "rm": lambda args: rdcp_command.Delete(args[0], args[0][-1] == "/", handler=print),
     "ls": _dirlist,
     "dmversion": lambda _: rdcp_command.DMVersion(handler=print),

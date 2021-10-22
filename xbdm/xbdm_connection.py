@@ -149,9 +149,6 @@ class XBDMConnection:
                 logger.error(e)
                 self._xbdm.close()
 
-            if not self._dedicated_channels and not self._xbdm.connected:
-                self._running = False
-
         logger.debug(f"Shutting down connection for {self.xbox_info}")
         self._close()
 
