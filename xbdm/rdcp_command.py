@@ -1490,7 +1490,7 @@ class _StopOnBase(_ProcessedCommand):
 
     ALL = 0xFFFFFFFF
     CREATETHREAD = 0x01
-    FCE = 0x02
+    FIRST_CHANCE_EXCEPTION = 0x02
     DEBUGSTR = 0x04
     STACKTRACE = 0x08
 
@@ -1503,7 +1503,7 @@ class _StopOnBase(_ProcessedCommand):
         flags = []
         if events & self.CREATETHREAD:
             flags.append("createthread")
-        if events & self.FCE:
+        if events & self.FIRST_CHANCE_EXCEPTION:
             flags.append("fce")
         if events & self.DEBUGSTR:
             flags.append("debugstr")

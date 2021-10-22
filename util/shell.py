@@ -167,7 +167,7 @@ def _get_context(args) -> Optional[rdcp_command.RDCPCommand]:
                 enable_integer = True
             elif arg == "fp":
                 enable_floatingpoint = True
-            elif arg == "full"
+            elif arg == "full":
                 enable_full = True
 
     return rdcp_command.GetContext(
