@@ -745,7 +745,7 @@ class GetD3DState(_ProcessedCommand):
 
 
 class GetExtContext(_ProcessedCommand):
-    """???"""
+    """Gets thread context information as a struct."""
 
     class Response(_ProcessedResponse):
         def __init__(self, response: rdcp_response.RDCPResponse):
@@ -1254,13 +1254,13 @@ class MagicBoot(_ProcessedCommand):
     def __init__(
         self,
         title: str,
-        enable_wait_for_debugger: bool = False,
+        enable_xbdm_after_reboot: bool = False,
         enable_cold: bool = False,
         handler=None,
     ):
         super().__init__("magicboot", response_class=self.Response, handler=handler)
         flags = ""
-        if enable_wait_for_debugger:
+        if enable_xbdm_after_reboot:
             flags += " debug"
         if enable_cold:
             flags += " cold"

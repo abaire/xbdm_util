@@ -148,29 +148,34 @@ def _dirlist(args) -> Optional[rdcp_command.RDCPCommand]:
 def _get_context(args) -> Optional[rdcp_command.RDCPCommand]:
     thread_id = int(args[0], 0)
 
-    enable_control = False
-    enable_interrupt = False
-    enable_full = True
-    enable_fp = False
+    if not args[1:]:
+        enable_control = True
+        enable_integer = True
+        enable_full = True
+        enable_floatingpoint = True
+    else:
+        enable_control = False
+        enable_integer = False
+        enable_full = False
+        enable_floatingpoint = False
 
-    for arg in args[1:]:
-        arg = arg.lower()
-        if arg == "control":
-            enable_control = True
-            enable_full = False
-        elif arg == "int":
-            enable_interrupt = True
-            enable_full = False
-        elif arg == "fp":
-            enable_fp = True
-            enable_full = False
+        for arg in args[1:]:
+            arg = arg.lower()
+            if arg == "control":
+                enable_control = True
+            elif arg == "int":
+                enable_integer = True
+            elif arg == "fp":
+                enable_floatingpoint = True
+            elif arg == "full"
+                enable_full = True
 
     return rdcp_command.GetContext(
         thread_id,
         enable_control,
-        enable_interrupt,
+        enable_integer,
         enable_full,
-        enable_fp,
+        enable_floatingpoint,
         handler=print,
     )
 
