@@ -1141,6 +1141,12 @@ class IsBreak(_ProcessedCommand):
     """Checks to see if a breakpoint is set at the given address."""
 
     class Response(_ProcessedResponse):
+        TYPE_NONE = 0
+        TYPE_WRITE = 1
+        TYPE_READ_OR_WRITE = 2
+        TYPE_EXECUTE = 3
+        TYPE_ADDRESS = 4
+
         def __init__(self, response: rdcp_response.RDCPResponse):
             super().__init__(response)
 
@@ -1154,7 +1160,19 @@ class IsBreak(_ProcessedCommand):
 
         @property
         def _body_str(self) -> str:
-            return f"type: {self.type}"
+            type_str = "???"
+            if self.type == self.TYPE_NONE:
+                "No breakpoint"
+            elif self.type == self.TYPE_WRITE:
+                "Write"
+            elif self.type == self.TYPE_READ_OR_WRITE:
+                "Read/Write"
+            elif self.type == self.TYPE_EXECUTE:
+                "Execute"
+            elif self.type == self.TYPE_ADDRESS:
+                "Previously set breakpoint at address"
+
+            return f"type: {type_str}({self.type})"
 
     def __init__(self, addr, handler=None):
         super().__init__("isbreak", response_class=self.Response, handler=handler)
