@@ -109,7 +109,7 @@ def _debug_options(args) -> Optional[rdcp_command.RDCPCommand]:
 
 
 def _debugger(args) -> Optional[rdcp_command.RDCPCommand]:
-    connect = not args or args[0].lower() != "d"
+    connect = not args or args[0][0].lower() != "d"
     return rdcp_command.Debugger(connect, handler=print)
 
 
