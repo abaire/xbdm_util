@@ -4,6 +4,7 @@ import enum
 import ipaddress
 import logging
 from typing import Callable
+from typing import Mapping
 from typing import Optional
 
 from . import rdcp_response
@@ -1798,16 +1799,27 @@ class SetConfig(_ProcessedCommand):
 
 
 class SetContext(_ProcessedCommand):
-    """Sets the active thread context."""
+    """Sets registers in the active thread context."""
 
     class Response(_ProcessedRawBodyResponse):
         pass
 
-    def __init__(self, thread_id: int, ext: Optional[int] = None, handler=None):
+    def __init__(
+        self,
+        thread_id: int,
+        register_map: Optional[Mapping[str, int]] = None,
+        ext: Optional[bytes] = None,
+        handler=None,
+    ):
         super().__init__("setcontext", response_class=self.Response, handler=handler)
-        self.body = b" thread=0x%X " % thread_id
-        if ext is not None:
-            self.body += b" ext=0x%X" % ext
+        body = " thread=0x%X " % thread_id
+        if ext:
+            body += " ext=0x%X" % len(ext)
+            self._binary_payload = ext
+        if register_map:
+            for entry in register_map.items():
+                body += " %s=0x%X" % entry
+        self.body = bytes(body, "utf-8")
 
 
 class SetFileAttributes(_ProcessedCommand):

@@ -14,7 +14,8 @@ from xbdm.xbdm_connection import XBDMConnection
 logger = logging.getLogger(__name__)
 
 
-def _parse_address(addr_str: str) -> int:
+def _parse_int_expression(addr_str: str) -> int:
+    """Parses the given string as an expression that evaluates to an integer. NO INPUT SANITIZING IS PERFORMED."""
     try:
         return int(eval(addr_str))
     except:
@@ -43,11 +44,11 @@ def _break(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
         mode = mode[1:]
 
     if mode == "addr" or mode == "address" or mode == "a":
-        address = _parse_address(args[1])
+        address = _parse_int_expression(args[1])
         return rdcp_command.BreakAtAddress(address, clear, handler=_print_with_message)
 
     if mode == "r" or mode == "read":
-        address = _parse_address(args[1])
+        address = _parse_int_expression(args[1])
         if len(args) > 2:
             size = int(args[2], 0)
         else:
@@ -57,7 +58,7 @@ def _break(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
         )
 
     if mode == "w" or mode == "write":
-        address = _parse_address(args[1])
+        address = _parse_int_expression(args[1])
         if len(args) > 2:
             size = int(args[2], 0)
         else:
@@ -67,7 +68,7 @@ def _break(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
         )
 
     if mode == "exec" or mode == "execute" or mode == "e":
-        address = _parse_address(args[1])
+        address = _parse_int_expression(args[1])
         if len(args) > 2:
             size = int(args[2], 0)
         else:
@@ -181,7 +182,7 @@ def _get_context(args) -> Optional[rdcp_command.RDCPCommand]:
 
 
 def _get_mem(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
-    address = _parse_address(args[0])
+    address = _parse_int_expression(args[0])
     return rdcp_command.GetMem(address, int(args[1], 0), handler=print)
 
 
@@ -267,16 +268,28 @@ def _notifyat(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
 
 def _set_context(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
     thread_id = int(args[0], 0)
-    ext = None
-    if len(args) > 1:
-        ext = int(args[1], 0)
 
-    return rdcp_command.SetContext(thread_id, ext, handler=print)
+    registers = {}
+    ext = None
+
+    i = 1
+    while i < len(args):
+        if args[i].lower() == "ext":
+            i += 1
+            ext = binascii.unhexlify(args[i])
+        else:
+            key = args[i]
+            i += 1
+            registers[key] = _parse_int_expression(args[i])
+
+        i += 1
+
+    return rdcp_command.SetContext(thread_id, registers, ext, handler=print)
 
 
 def _set_mem(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
     """addr:int hexadecimal_string: str"""
-    addr = _parse_address(args[0])
+    addr = _parse_int_expression(args[0])
 
     value = binascii.unhexlify("".join(args[1:]))
 
