@@ -318,6 +318,7 @@ def _xbe_info(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
 DISPATCH_TABLE = {
     "altaddr": lambda _: rdcp_command.AltAddr(handler=print),
     "break": _break,
+    "bye": lambda _: rdcp_command.Bye(handler=print),
     "continue": _continue,
     "debugoptions": _debug_options,
     "debugger": _debugger,
@@ -366,6 +367,8 @@ DISPATCH_TABLE = {
     # TODO: Convert channel to dedicated channel.
     # "notify": lambda _: rdcp_command.Notify(handler=print),
     "notifyat": _notifyat,
+    # Dummy notifyat that will not spawn a listener even on a local address.
+    "notifyatext": _notifyat,
     # PBSnap
     "performancecounterlist": lambda _: rdcp_command.PerformanceCounterList(
         handler=print
@@ -464,13 +467,20 @@ class Shell:
 
                         # Hack: Intercept the command to see if it is a NotifyAt
                         # and stand up a listener if necessary.
-                        if isinstance(cmd, rdcp_command.NotifyAt):
+                        if command == "notifyat" and isinstance(
+                            cmd, rdcp_command.NotifyAt
+                        ):
                             self._handle_notifyat(
                                 cmd.address, cmd.port, cmd.drop, cmd.debug
                             )
 
                         if cmd:
                             self._bridge.send_rdcp_command(cmd)
+
+                        # Hack: Wait for a graceful close and exit.
+                        if command == "bye":
+                            self._bridge.await_empty_queue()
+                            return
 
                 except IndexError:
                     print("Missing required parameter.")
