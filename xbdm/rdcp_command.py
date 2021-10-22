@@ -2054,15 +2054,8 @@ class Threads(_ProcessedCommand):
 class LoadOnBootTitle(_ProcessedCommand):
     """Sets the path to the XBE that will be loaded when rebooting."""
 
-    class Response(_ProcessedResponse):
-        def __init__(self, response: rdcp_response.RDCPResponse):
-            super().__init__(response)
-            lines = response.parse_multiline()
-            self.thread_ids = [int(x.decode("utf-8")) for x in lines]
-
-        @property
-        def _body_str(self) -> str:
-            return str(self.thread_ids)
+    class Response(_ProcessedRawBodyResponse):
+        pass
 
     def __init__(
         self,

@@ -3,12 +3,16 @@ from __future__ import annotations
 
 import logging
 import os
+import typing
+
 import time
 
 from xbdm import rdcp_command
 from xbdm.xbdm_connection import XBDMConnection
 
 from typing import Dict
+from typing import Iterable
+from typing import List
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -30,6 +34,19 @@ class Thread:
         self.create_time: Optional[int] = None
 
         self.get_info()
+
+    def __str__(self) -> str:
+        lines = [
+            f"Thread: {self.thread_id}",
+            "  Priority: %d %s"
+            % (self.priority, "[Suspended]" if self.suspended else ""),
+            "  Base : 0x%X" % (self.base_addr or 0),
+            "  Start: 0x%X" % (self.start_addr or 0),
+            "  Thread Local Base: 0x%X" % (self.thread_local_storage_addr or 0),
+            "  Limit: 0x%X" % (self.limit or 0),
+            "  CreatedAt: %d" % (self.create_time or -1),
+        ]
+        return "\n".join(lines)
 
     def get_info(self):
         self._connection.send_rdcp_command(
@@ -60,6 +77,12 @@ class Debugger:
         self._notification_channel_connected = False
         self._hello_received = False
 
+        self._active_thread_id: Optional[int] = None
+
+    @property
+    def threads(self) -> Iterable[Thread]:
+        return self._threads.values()
+
     def shutdown(self):
         if self._debug_port:
             self._connection.destroy_notification_listener(self._debug_port)
@@ -78,7 +101,7 @@ class Debugger:
         self._connection.send_rdcp_command(rdcp_command.Debugger())
         self._connection.await_empty_queue()
 
-        self._connection.send_rdcp_command(rdcp_command.Threads(self._on_threads))
+        self._refresh_thread_info_async()
 
     def debug_xbe(
         self, path: str, command_line: Optional[str] = None, persist: bool = False
@@ -87,21 +110,49 @@ class Debugger:
 
         dir_name = os.path.dirname(path)
         xbe_name = os.path.basename(path)
-        self._connection.send_rdcp_command(
-            (
-                rdcp_command.LoadOnBootTitle(
-                    name=xbe_name,
-                    directory=dir_name,
-                    command_line=command_line,
-                    persist=persist,
-                )
-            )
+
+        response_catcher: List[rdcp_command.LoadOnBootTitle.Response] = []
+        cmd = rdcp_command.LoadOnBootTitle(
+            name=xbe_name,
+            directory=dir_name,
+            command_line=command_line,
+            persist=persist,
+            handler=lambda x: response_catcher.append(x),
         )
+        self._connection.send_rdcp_command(cmd)
+        self._connection.await_empty_queue()
+
+        response = response_catcher[0]
+        if not response.ok:
+            print(response.pretty_message)
+            return
+
         self._restart_and_attach()
 
-    def restart_and_break_at_start(self):
+    def break_at_start(self):
         """Reboots the current XBE and breaks at the entry address."""
         self._restart_and_attach()
+
+    def set_active_thread(self, thread_id: Optional[int]):
+        self._active_thread_id = thread_id
+
+    def step_function(self) -> bool:
+        if self._active_thread_id is None:
+            print("No active thread context")
+            return False
+
+        self._connection.send_rdcp_command(
+            rdcp_command.FuncCall(self._active_thread_id)
+        )
+        self._connection.await_empty_queue()
+        return True
+
+    def refresh_thread_info(self):
+        self._refresh_thread_info_async()
+        self._connection.await_empty_queue()
+
+    def _refresh_thread_info_async(self):
+        self._connection.send_rdcp_command(rdcp_command.Threads(self._on_threads))
 
     def _restart_and_attach(self):
         self._connection.send_rdcp_command(
@@ -177,6 +228,6 @@ class Debugger:
         for thread_id in to_add:
             self._threads[thread_id] = Thread(thread_id, self._connection)
 
-        to_update = thread_ids.union(known_threads)
+        to_update = thread_ids.intersection(known_threads)
         for thread_id in to_update:
             self._threads[thread_id].get_info()

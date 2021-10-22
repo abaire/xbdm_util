@@ -475,6 +475,18 @@ class Shell:
             ),
             "/attach": ("Attach debugger.", self._cmd_debugger_attach),
             "/restart": ("Restart and break at start.", self._cmd_debugger_restart),
+            "/switch": (
+                "Set the active thread. <thread_id>",
+                self._cmd_debugger_set_active_thread,
+            ),
+            "/threads": (
+                "Prints thread information.",
+                self._cmd_debugger_get_thread_info,
+            ),
+            "/step": (
+                "Step one function call in the current thread.",
+                self._cmd_debugger_step,
+            ),
         }
 
     def run(self):
@@ -617,7 +629,37 @@ class Shell:
             print("ERROR: /attach debugger first.")
             return self.Result.HANDLED
 
-        self._debugger_context.restart_and_break_at_start()
+        self._debugger_context.break_at_start()
+        return self.Result.HANDLED
+
+    def _cmd_debugger_set_active_thread(self, args: [str]) -> Result:
+        if not self._debugger_context:
+            print("ERROR: /attach debugger first.")
+            return self.Result.HANDLED
+
+        thread_id = int(args[0], 0)
+        self._debugger_context.set_active_thread(thread_id)
+        return self.Result.HANDLED
+
+    def _cmd_debugger_step(self, _args: [str]) -> Result:
+        if not self._debugger_context:
+            print("ERROR: /attach debugger first.")
+            return self.Result.HANDLED
+
+        self._debugger_context.step_function()
+        return self.Result.HANDLED
+
+    def _cmd_debugger_get_thread_info(self, _args: [str]) -> Result:
+        if not self._debugger_context:
+            print("ERROR: /attach debugger first.")
+            return self.Result.HANDLED
+
+        self._debugger_context.refresh_thread_info()
+
+        thread_info = sorted(self._debugger_context.threads, key=lambda x: x.thread_id)
+        for thread in thread_info:
+            print(thread)
+
         return self.Result.HANDLED
 
     def _attach_debugger(self):
