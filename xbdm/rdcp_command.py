@@ -23,7 +23,7 @@ class RDCPCommand:
         "altaddr",  #  > addr=0x0a000210
         "authuser",  # (resp=QWORD name=STRING) > 414:access denied  # Looks like "passwd" is another param maybe for an older XDK?
         # "boxid",  # Can only be executed if security is enabled.
-        "capctrl",  # () > 400
+        "capctrl",  # "start" or none - starts or stops profiling capture
         "crashdump",
         "d3dopcode",
         "debugger",
@@ -375,18 +375,16 @@ class Bye(_ProcessedCommand):
         super().__init__("bye", response_class=self.Response, handler=handler)
 
 
-# class Capcontrol(_ProcessedCommand):
-#     """??."""
-#
-#     class Response(_ProcessedResponse):
-#         pass
-#
-#     def __init__(self, handler=None):
-#         super().__init__("continue", response_class=self.Response, handler=handler)
-#         # params: start (name buffersize) | fastcapenabled | stop
-#         thread_id_string = "0x%X" % thread_id
-#         exception_string = " exception" if exception else ""
-#         self.body = bytes(f" thread={thread_id_string}{exception_string}", "utf-8")
+class ProfilerCaptureControl(_ProcessedCommand):
+    """Starts or stops profiling capture."""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(self, start: bool = True, handler=None):
+        super().__init__("capctrl", response_class=self.Response, handler=handler)
+        if start:
+            self.body = b" start"
 
 
 class Continue(_ProcessedCommand):
