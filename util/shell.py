@@ -150,19 +150,21 @@ def _get_context(args) -> Optional[rdcp_command.RDCPCommand]:
 
     enable_control = False
     enable_interrupt = False
-    enable_full = False
+    enable_full = True
     enable_fp = False
 
     for arg in args[1:]:
         arg = arg.lower()
         if arg == "control":
             enable_control = True
+            enable_full = False
         elif arg == "int":
             enable_interrupt = True
-        elif arg == "full":
-            enable_full = True
+            enable_full = False
         elif arg == "fp":
             enable_fp = True
+            enable_full = False
+
     return rdcp_command.GetContext(
         thread_id,
         enable_control,
