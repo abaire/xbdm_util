@@ -397,7 +397,7 @@ class Continue(_ProcessedCommand):
         super().__init__("continue", response_class=self.Response, handler=handler)
         thread_id_string = "0x%X" % thread_id
         exception_string = " exception" if exception else ""
-        self.body = bytes(f" thread={thread_id_string}{exception_string}")
+        self.body = bytes(f" thread={thread_id_string}{exception_string}", "utf-8")
 
 
 # class Crashdump(_ProcessedCommand):

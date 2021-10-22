@@ -195,18 +195,18 @@ def _kernel_debug(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
 def _magic_boot(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
     title = args[0]
 
-    enable_wait_for_debugger = False
+    keep_debugger_resident = True
     enable_cold = False
 
     for arg in args[1:]:
         arg = arg.lower()
-        if arg[0] == "w" or arg[0] == "d":
-            enable_wait_for_debugger = True
+        if arg[0] == "n":
+            keep_debugger_resident = False
         elif arg[0] == "c":
             enable_cold = True
 
     return rdcp_command.MagicBoot(
-        title, enable_wait_for_debugger, enable_cold, handler=print
+        title, keep_debugger_resident, enable_cold, handler=print
     )
 
 
