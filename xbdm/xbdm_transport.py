@@ -142,6 +142,7 @@ class XBDMTransport(ip_transport.IPTransport):
         ):
             return True
         self._state = self.STATE_CONNECTED
+        logger.debug(f"Connect response: {response.data.decode('utf-8')}")
         return False
 
     def _process_command_response(self, response: rdcp_response.RDCPResponse) -> bool:
