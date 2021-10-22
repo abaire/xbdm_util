@@ -445,6 +445,7 @@ class Shell:
             # Handle broadcast requests.
             if line[0] == "!":
                 self._bridge.broadcast_notification(f"{line[1:]}\r\n")
+                self._print_prompt()
                 continue
 
             line = line.split(" ")
