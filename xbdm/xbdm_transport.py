@@ -35,6 +35,15 @@ class XBDMTransport(ip_transport.IPTransport):
         # TODO: Make this thread safe.
         return self._command_queue or self._read_buffer or self._write_buffer
 
+    def debug__notify_connected(self):
+        """Sets the state to STATE_CONNECTED if the socket is connected.
+
+        This is necessary as XBDM will not send a connection event when restarting with a debug notification channel already in place.
+        """
+        if not self.connected or self.can_process_commands:
+            return
+        self._state = self.STATE_CONNECTED
+
     def send_command(self, cmd: rdcp_command.RDCPCommand) -> bool:
         logger.debug(f"Queueing RDCP command {cmd}")
         if self._state < self.STATE_CONNECTED:

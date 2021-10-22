@@ -34,6 +34,7 @@ class IPTransport:
         self._read_buffer = bytearray(self._read_buffer[size:])
 
     def set_connection(self, sock, addr):
+        logger.debug(f"{self.__class__.__name__}::set_connection to f{addr}")
         self._sock = sock
         self.addr = addr
 
@@ -103,7 +104,7 @@ class IPTransport:
             if not data:
                 if self.name:
                     logger.info(
-                        f"Remote closed in IPTransport {self.name} to {self.addr}"
+                        f"Remote closed in IPTransport '{self.name}' to {self.addr}"
                     )
                 else:
                     logger.info(f"Remote closed in IPTransport to {self.addr}")

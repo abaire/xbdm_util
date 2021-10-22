@@ -2007,6 +2007,10 @@ class Threads(_ProcessedCommand):
             self.thread_ids = [int(x.decode("utf-8")) for x in lines]
 
         @property
+        def ok(self):
+            return self.status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+
+        @property
         def _body_str(self) -> str:
             return str(self.thread_ids)
 

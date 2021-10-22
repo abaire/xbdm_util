@@ -9,6 +9,7 @@ from typing import Optional
 import natsort
 
 from xbdm import rdcp_command
+from xbdm.debugger import Debugger
 from xbdm.xbdm_connection import XBDMConnection
 
 logger = logging.getLogger(__name__)
@@ -202,7 +203,7 @@ def _kernel_debug(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
     mode = rdcp_command.KernelDebug.Mode.ENABLE
     if args:
         args[0] = args[0].lower()
-        if args[0] == "disable":
+        if args[0].startswith("disable"):
             mode = rdcp_command.KernelDebug.Mode.DISABLE
         elif args[0] == "except":
             mode = rdcp_command.KernelDebug.Mode.EXCEPT
@@ -454,18 +455,21 @@ class Shell:
         HANDLED = 1
         EXIT_REQUESTED = 2
 
-    def __init__(self, bridge: XBDMConnection):
-        self._bridge = bridge
+    def __init__(self, conn: XBDMConnection):
+        self._conn = conn
+        self._debugger_context: Optional[Debugger] = None
 
         self._shell_commands = {
-            "exit": "Terminate the connection and exit.",
-            "quit": "Terminate the connection and exit.",
-            "q": "Terminate the connection and exit.",
-            "?": "Print help.",
-            "help": "Print help.",
-            "h": "Print help.",
-            "reconnect": "Attempt to reconnect to XBDM.",
-            "raw": r"Send a raw \r\n terminated string.",
+            "exit": ("Terminate the connection and exit.", self._cmd_exit),
+            "quit": ("Terminate the connection and exit.", self._cmd_exit),
+            "q": ("Terminate the connection and exit.", self._cmd_exit),
+            "?": ("Print help.", self._print_help),
+            "help": ("Print help.", self._print_help),
+            "h": ("Print help.", self._print_help),
+            "reconnect": ("Attempt to reconnect to XBDM.", self._cmd_reconnect),
+            "raw": (r"Send a raw \r\n terminated string.", self._cmd_send_raw),
+            "/attach": ("Attach debugger.", self._cmd_debugger_attach),
+            "/restart": ("Restart and break at start.", self._cmd_debugger_restart),
         }
 
     def run(self):
@@ -474,12 +478,6 @@ class Shell:
         for line in sys.stdin:
             line = line.strip()
             if not line:
-                self._print_prompt()
-                continue
-
-            # Handle broadcast requests.
-            if line[0] == "!":
-                self._bridge.broadcast_notification(f"{line[1:]}\r\n")
                 self._print_prompt()
                 continue
 
@@ -511,11 +509,11 @@ class Shell:
                             )
 
                         if cmd:
-                            self._bridge.send_rdcp_command(cmd)
+                            self._conn.send_rdcp_command(cmd)
 
                         # Hack: Wait for a graceful close and exit.
                         if command == "bye":
-                            self._bridge.await_empty_queue()
+                            self._conn.await_empty_queue()
                             return
 
                 except IndexError:
@@ -528,7 +526,7 @@ class Shell:
                         print("Failed to reconnect")
                         break
 
-                self._bridge.await_empty_queue()
+                self._conn.await_empty_queue()
 
             self._print_prompt()
 
@@ -544,47 +542,64 @@ class Shell:
             return
 
         logger.info(f"Starting notifyat listener at {port}")
-        self._bridge.create_notification_listener(port)
+        self._conn.create_notification_listener(port)
 
     def _print_prompt(self) -> None:
-        print("> ", end="")
+        if self._debugger_context:
+            print("dbg> ", end="")
+        else:
+            print("> ", end="")
         sys.stdout.flush()
 
     def _handle_shell_command(self, command: str, args: [str]) -> Result:
-        if not command or command == "help" or command == "?" or command == "h":
-            self._print_help(args)
-            return self.Result.HANDLED
+        entry = self._shell_commands.get(command.lower())
+        if not entry:
+            return self.Result.NOT_HANDLED
 
-        if command == "reconnect":
-            if not self._attempt_reconnect():
-                print("Failed to reconnect.")
-            else:
-                print("Connected")
-            return self.Result.HANDLED
+        _, handler = entry
+        return handler(args)
 
-        if command == "raw":
-            body = None
-            if len(args) > 1:
-                body = bytes(" ".join(args[1:]), "utf-8")
-            cmd = rdcp_command.RDCPCommand(args[0], body)
-            self._bridge.send_rdcp_command(cmd)
-            return self.Result.HANDLED
+    def _cmd_exit(self, _args: [str]) -> Result:
+        return self.Result.EXIT_REQUESTED
 
-        if command.startswith("exit") or command.startswith("quit"):
-            return self.Result.EXIT_REQUESTED
-
-        return self.Result.NOT_HANDLED
-
-    def _print_help(self, _args: [str]):
+    def _print_help(self, _args: [str]) -> Result:
         commands = sorted([k for k, v in DISPATCH_TABLE.items() if v])
         print("XBDM commands:")
         print(textwrap.fill(", ".join(commands), 80))
+
         print("\nShell commands:")
         print(textwrap.fill(", ".join(sorted(self._shell_commands.keys()))))
 
-    def _attempt_reconnect(self) -> bool:
-        self._bridge.reconnect()
-        for i in range(10):
-            if self._bridge.connect_xbdm():
-                return True
-        return False
+        return self.Result.HANDLED
+
+    def _cmd_reconnect(self, _args: [str]) -> Result:
+        if not self._conn.reconnect(10):
+            print("Failed to reconnect.")
+        else:
+            print("Connected")
+        return self.Result.HANDLED
+
+    def _cmd_send_raw(self, args: [str]) -> Result:
+        body = None
+        if len(args) > 1:
+            body = bytes(" ".join(args[1:]), "utf-8")
+        cmd = rdcp_command.RDCPCommand(args[0], body)
+        self._conn.send_rdcp_command(cmd)
+
+        return self.Result.HANDLED
+
+    def _cmd_debugger_attach(self, _args: [str]) -> Result:
+        if self._debugger_context:
+            print("Already in debug mode.")
+        else:
+            self._debugger_context = Debugger(self._conn)
+            self._debugger_context.attach()
+        return self.Result.HANDLED
+
+    def _cmd_debugger_restart(self, _args: [str]) -> Result:
+        if not self._debugger_context:
+            print("ERROR: /attach debugger first.")
+            return self.Result.HANDLED
+
+        self._debugger_context.break_at_start()
+        return self.Result.HANDLED

@@ -49,10 +49,17 @@ class XBDMConnection:
     def can_process_xbdm_commands(self) -> bool:
         return self._xbdm.can_process_commands
 
-    def reconnect(self):
+    def reconnect(self, connect_attempts: int = 4) -> bool:
+        """Drops and restores the connection to the target.
+
+        Returns True if the reconnection was successful"""
         self.shutdown()
         logger.info("Reconnecting...")
         self._startup()
+        for i in range(connect_attempts):
+            if self.connect_xbdm():
+                return True
+        return self.can_process_xbdm_commands
 
     def _startup(self):
         self._listen_sock = socket.create_server((self.listen_ip, 0), backlog=1)
@@ -106,17 +113,38 @@ class XBDMConnection:
     def send_rdcp_command(self, cmd: rdcp_command.RDCPCommand) -> bool:
         return self._xbdm.send_command(cmd)
 
-    def create_notification_listener(self, port: int):
+    def create_notification_listener(
+        self, port: Optional[int] = None, handler: Callable[[str], None] = None
+    ) -> Tuple[str, int]:
         """Creates a new dedicated notification listener on the given port."""
-        addr = ("", port)
+        if not port:
+            port = 0
         new_transport = notification_transport.NotificationServer(
-            addr, f"NotificationServer@{port}"
+            ("", port), handler=handler
         )
         self._dedicated_channels.add(new_transport)
+        return new_transport.addr
+
+    def destroy_notification_listener(self, port: int):
+        """Closes an existing dedicated notification listener."""
+        for transport in self._dedicated_channels:
+            if not isinstance(transport, notification_transport.NotificationServer):
+                continue
+            if not transport.addr[1] == port:
+                continue
+
+            transport.close()
 
     def broadcast_notification(self, message: str) -> None:
         for channel in self._dedicated_channels:
             channel.broadcast(bytes(message, "utf-8"))
+
+    def debugger__set_control_channel_state_to_connected(self):
+        """Marks the underlying XBDMTransport as fully connected if it has a socket connection.
+
+        This is necessary as XBDM will not send a connection event when restarting with a debug notification channel already in place.
+        """
+        self._xbdm.debug__notify_connected()
 
     def _thread_main(self):
         while self._running:
@@ -165,7 +193,7 @@ class XBDMConnection:
             logger.error(f"Failed to connect to XBDM {self.xbox_info}")
             return False
 
-        logger.info(f"Connected to XBDM {self.xbox_info}")
+        logger.info(f"Socket connected to XBDM {self.xbox_info}")
         sock.setblocking(False)
         self._xbdm.set_connection(sock, self.xbox_addr)
         return True
