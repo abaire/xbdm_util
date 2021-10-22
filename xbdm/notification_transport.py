@@ -73,5 +73,6 @@ class NotificationServer(ip_transport.IPTransport):
             remote, remote_addr = self._sock.accept()
             handler = NotificationTransport(self.name, remote, remote_addr)
             self._add_sub_connection(handler)
+            logger.debug(f"Accepted notification channel from {remote_addr}")
 
         return True

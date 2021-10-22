@@ -364,7 +364,7 @@ DISPATCH_TABLE = {
     "modules": _modules,
     "nostopon": _no_stop_on,
     # TODO: Convert channel to dedicated channel.
-    #"notify": lambda _: rdcp_command.Notify(handler=print),
+    # "notify": lambda _: rdcp_command.Notify(handler=print),
     "notifyat": _notifyat,
     # PBSnap
     "performancecounterlist": lambda _: rdcp_command.PerformanceCounterList(
