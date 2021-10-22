@@ -428,7 +428,8 @@ DISPATCH_TABLE = {
     "threads": lambda _: rdcp_command.Threads(handler=print),
     # UserList
     # VSSnap
-    "walk_mem": _walk_memory,
+    "memwalk": _walk_memory,
+    "walkmem": _walk_memory,
     # WriteFile
     "xbeinfo": _xbe_info,
     "xtlinfo": lambda _: rdcp_command.XTLInfo(handler=print),
