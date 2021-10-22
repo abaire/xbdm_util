@@ -363,7 +363,8 @@ DISPATCH_TABLE = {
     "modsections": lambda args: rdcp_command.ModSections(args[0], handler=print),
     "modules": _modules,
     "nostopon": _no_stop_on,
-    "notify": lambda _: rdcp_command.Notify(handler=print),
+    # TODO: Convert channel to dedicated channel.
+    #"notify": lambda _: rdcp_command.Notify(handler=print),
     "notifyat": _notifyat,
     # PBSnap
     "performancecounterlist": lambda _: rdcp_command.PerformanceCounterList(

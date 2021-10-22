@@ -25,6 +25,7 @@ class XBDMConnection:
         self.xbox_addr = xbox_addr
 
         self._xbdm: Optional[xbdm_transport.XBDMTransport] = None
+        self._dedicated_channels = set()
 
         self._listen_sock: Optional[socket.socket] = None
         self.listen_addr: Optional[Tuple[str, int]] = None
@@ -74,6 +75,10 @@ class XBDMConnection:
         if self._xbdm:
             self._xbdm.close()
 
+        for connection in self._dedicated_channels:
+            connection.close()
+        self._dedicated_channels.clear()
+
     def connect_xbdm(self) -> bool:
         if self._xbdm.can_process_commands:
             return True
@@ -113,16 +118,26 @@ class XBDMConnection:
 
                 self._xbdm.select(readable, writable, exceptional)
 
+                for connection in self._dedicated_channels:
+                    connection.select(readable, writable, exceptional)
+
                 readable, writable, exceptional = select.select(
                     readable, writable, exceptional, SELECT_TIMEOUT_SECS
                 )
+
+                closed_channels = set()
+                for connection in self._dedicated_channels:
+                    if not connection.process(readable, writable, exceptional):
+                        closed_channels.add(connection)
+                self._dedicated_channels -= closed_channels
 
                 if not self._xbdm.process(readable, writable, exceptional):
                     self._running = False
                     break
 
-        except ConnectionResetError:
-            self._running = False
+        except ConnectionResetError as e:
+            logger.error("TODO: handle connection reset gracefully")
+            logger.error(e)
 
         logger.debug(f"Shutting down connection for {self.xbox_info}")
         self._close()
