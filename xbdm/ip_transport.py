@@ -134,9 +134,14 @@ class IPTransport:
     ):
         closed_connections = set()
         for connection in self._sub_connections:
-            if not connection.process(readable, writable, exceptional):
+            try:
+                if not connection.process(readable, writable, exceptional):
+                    connection.close()
+                    closed_connections.add(connection)
+            except ConnectionResetError:
                 connection.close()
                 closed_connections.add(connection)
+
         self._sub_connections -= closed_connections
 
     def _add_sub_connection(self, new_transport: IPTransport):

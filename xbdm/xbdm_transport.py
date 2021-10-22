@@ -50,13 +50,6 @@ class XBDMTransport(ip_transport.IPTransport):
         super().close()
         self._state = self.STATE_INIT
 
-    def create_notification_server(self, port: int):
-        """Creates a new dedicated notification listener."""
-
-        addr = ("", port)
-        new_transport = notification_transport.NotificationServer(addr, self.name)
-        self._add_sub_connection(new_transport)
-
     def _send_next_command(self):
         if self._state != self.STATE_CONNECTED or not self._command_queue:
             return

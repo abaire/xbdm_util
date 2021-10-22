@@ -76,3 +76,6 @@ class NotificationServer(ip_transport.IPTransport):
             logger.debug(f"Accepted notification channel from {remote_addr}")
 
         return True
+
+    def close(self):
+        super().close()

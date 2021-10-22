@@ -8,7 +8,7 @@ from typing import Callable
 from typing import Optional
 from typing import Tuple
 
-from . import ip_transport
+from . import notification_transport
 from . import rdcp_command
 from . import xbdm_transport
 
@@ -107,37 +107,46 @@ class XBDMConnection:
         return self._xbdm.send_command(cmd)
 
     def create_notification_listener(self, port: int):
-        self._xbdm.create_notification_server(port)
+        """Creates a new dedicated notification listener on the given port."""
+        addr = ("", port)
+        new_transport = notification_transport.NotificationServer(
+            addr, f"NotificationServer@{port}"
+        )
+        self._dedicated_channels.add(new_transport)
 
     def _thread_main(self):
-        try:
-            while self._running:
-                readable = [self._listen_sock]
-                writable = []
-                exceptional = [self._listen_sock]
+        while self._running:
+            readable = [self._listen_sock]
+            writable = []
+            exceptional = [self._listen_sock]
 
-                self._xbdm.select(readable, writable, exceptional)
+            self._xbdm.select(readable, writable, exceptional)
 
-                for connection in self._dedicated_channels:
-                    connection.select(readable, writable, exceptional)
+            for connection in self._dedicated_channels:
+                connection.select(readable, writable, exceptional)
 
-                readable, writable, exceptional = select.select(
-                    readable, writable, exceptional, SELECT_TIMEOUT_SECS
-                )
+            readable, writable, exceptional = select.select(
+                readable, writable, exceptional, SELECT_TIMEOUT_SECS
+            )
 
-                closed_channels = set()
-                for connection in self._dedicated_channels:
-                    if not connection.process(readable, writable, exceptional):
-                        closed_channels.add(connection)
-                self._dedicated_channels -= closed_channels
+            closed_channels = set()
+            for connection in self._dedicated_channels:
+                if not connection.process(readable, writable, exceptional):
+                    closed_channels.add(connection)
+            self._dedicated_channels -= closed_channels
 
+            try:
                 if not self._xbdm.process(readable, writable, exceptional):
-                    self._running = False
-                    break
+                    self._xbdm.close()
+                    print("XBDM connection closed")
 
-        except ConnectionResetError as e:
-            logger.error("TODO: handle connection reset gracefully")
-            logger.error(e)
+            except ConnectionResetError as e:
+                logger.error("TODO: handle connection reset gracefully")
+                logger.error(e)
+                self._xbdm.close()
+
+            if not self._dedicated_channels and not self._xbdm.connected:
+                self._running = False
 
         logger.debug(f"Shutting down connection for {self.xbox_info}")
         self._close()
