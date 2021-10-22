@@ -485,6 +485,8 @@ class Shell:
 
                 except IndexError:
                     print("Missing required parameter.")
+                except ValueError as e:
+                    print(f"Incorrect type.\n{e}")
                 except ConnectionResetError:
                     print("Connection closed by XBOX")
                     if not self._attempt_reconnect():

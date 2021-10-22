@@ -321,7 +321,7 @@ class BreakAtAddress(_Break):
     def __init__(self, address: int, clear: bool = False, handler=None):
         super().__init__(handler)
         clear_string = "clear " if clear else ""
-        self.body = bytes(f" {clear_string}addr={address}")
+        self.body = bytes(f" {clear_string}addr={address}", "utf-8")
 
 
 class _BreakRange(_Break):
@@ -338,7 +338,9 @@ class _BreakRange(_Break):
         super().__init__(handler)
         clear_string = "clear " if clear else ""
         size_string = f"size={size}" if not clear else ""
-        self.body = bytes(f" {clear_string}{access_type}={address}{size_string}")
+        self.body = bytes(
+            f" {clear_string}{access_type}={address}{size_string}", "utf-8"
+        )
 
 
 class BreakOnRead(_BreakRange):
@@ -383,7 +385,7 @@ class Bye(_ProcessedCommand):
 #         # params: start (name buffersize) | fastcapenabled | stop
 #         thread_id_string = "0x%X" % thread_id
 #         exception_string = " exception" if exception else ""
-#         self.body = bytes(f" thread={thread_id_string}{exception_string}")
+#         self.body = bytes(f" thread={thread_id_string}{exception_string}", "utf-8")
 
 
 class Continue(_ProcessedCommand):
