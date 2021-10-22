@@ -81,4 +81,5 @@ class NotificationServer(ip_transport.IPTransport):
         super().close()
 
     def broadcast(self, message: bytes) -> None:
+        logger.debug(f"Broadcasting: {message.decode('utf-8')}")
         self._broadcast_sub_connections(message)

@@ -465,6 +465,7 @@ class Shell:
             "help": "Print help.",
             "h": "Print help.",
             "reconnect": "Attempt to reconnect to XBDM.",
+            "raw": r"Send a raw \r\n terminated string.",
         }
 
     def run(self):
@@ -559,6 +560,14 @@ class Shell:
                 print("Failed to reconnect.")
             else:
                 print("Connected")
+            return self.Result.HANDLED
+
+        if command == "raw":
+            body = None
+            if len(args) > 1:
+                body = bytes(" ".join(args[1:]), "utf-8")
+            cmd = rdcp_command.RDCPCommand(args[0], body)
+            self._bridge.send_rdcp_command(cmd)
             return self.Result.HANDLED
 
         if command.startswith("exit") or command.startswith("quit"):
