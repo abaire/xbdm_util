@@ -447,6 +447,7 @@ class Shell:
         for line in sys.stdin:
             line = line.strip()
             if not line:
+                self._print_prompt()
                 continue
 
             # Handle broadcast requests.
