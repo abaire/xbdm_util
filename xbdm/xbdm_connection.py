@@ -114,6 +114,10 @@ class XBDMConnection:
         )
         self._dedicated_channels.add(new_transport)
 
+    def broadcast_notification(self, message: str) -> None:
+        for channel in self._dedicated_channels:
+            channel.broadcast(bytes(message, "utf-8"))
+
     def _thread_main(self):
         while self._running:
             readable = [self._listen_sock]

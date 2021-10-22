@@ -79,3 +79,6 @@ class NotificationServer(ip_transport.IPTransport):
 
     def close(self):
         super().close()
+
+    def broadcast(self, message: bytes) -> None:
+        self._broadcast_sub_connections(message)

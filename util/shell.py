@@ -435,9 +435,16 @@ class Shell:
         self._print_prompt()
 
         for line in sys.stdin:
-            line = line.strip().split(" ")
+            line = line.strip()
             if not line:
-                break
+                continue
+
+            # Handle broadcast requests.
+            if line[0] == "!":
+                self._bridge.broadcast_notification(f"{line[1:]}\r\n")
+                continue
+
+            line = line.split(" ")
 
             command = line[0].lower()
             command_args = line[1:]

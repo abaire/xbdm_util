@@ -56,6 +56,10 @@ class IPTransport:
     def send(self, buffer: Union[bytes, bytearray]):
         self._write_buffer.extend(buffer)
 
+    def broadcast(self, message: bytes) -> None:
+        self._broadcast_sub_connections(message)
+        self.send(message)
+
     def select(
         self,
         readable: [socket.socket],
@@ -146,3 +150,7 @@ class IPTransport:
 
     def _add_sub_connection(self, new_transport: IPTransport):
         self._sub_connections.add(new_transport)
+
+    def _broadcast_sub_connections(self, message: bytes):
+        for connection in self._sub_connections:
+            connection.send(message)
