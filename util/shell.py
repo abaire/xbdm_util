@@ -362,7 +362,7 @@ DISPATCH_TABLE = {
     "dmversion": lambda _: rdcp_command.DMVersion(handler=print),
     "df": lambda args: rdcp_command.DriveFreeSpace(args[0][0], handler=print),
     "drivelist": lambda _: rdcp_command.DriveList(handler=print),
-    # FuncCall
+    "funccall": lambda args: rdcp_command.FuncCall(args[0], handler=print),
     "getcontext": _get_context,
     "getd3dstate": lambda _: rdcp_command.GetD3DState(handler=print),
     "getextcontext": lambda args: rdcp_command.GetExtContext(
@@ -469,6 +469,10 @@ class Shell:
             "h": ("Print help.", self._print_help),
             "reconnect": ("Attempt to reconnect to XBDM.", self._cmd_reconnect),
             "raw": (r"Send a raw \r\n terminated string.", self._cmd_send_raw),
+            "/launch": (
+                "Launch the given path in the debugger. <path_to_xbe> [commandline_arg [...]]",
+                self._cmd_debugger_launch,
+            ),
             "/attach": ("Attach debugger.", self._cmd_debugger_attach),
             "/restart": ("Restart and break at start.", self._cmd_debugger_restart),
         }
@@ -523,7 +527,7 @@ class Shell:
                     print(f"Incorrect type.\n{e}")
                 except ConnectionResetError:
                     print("Connection closed by XBOX")
-                    if not self._attempt_reconnect():
+                    if not self._conn.reconnect():
                         print("Failed to reconnect")
                         break
 
@@ -589,12 +593,23 @@ class Shell:
 
         return self.Result.HANDLED
 
+    def _cmd_debugger_launch(self, args: [str]) -> Result:
+        self._attach_debugger()
+
+        xbe = args[0]
+        if len(args) > 1:
+            command_line = " ".join(args[1:])
+        else:
+            command_line = None
+
+        self._debugger_context.debug_xbe(args[0], command_line=command_line)
+        return self.Result.HANDLED
+
     def _cmd_debugger_attach(self, _args: [str]) -> Result:
         if self._debugger_context:
             print("Already in debug mode.")
         else:
-            self._debugger_context = Debugger(self._conn)
-            self._debugger_context.attach()
+            self._attach_debugger()
         return self.Result.HANDLED
 
     def _cmd_debugger_restart(self, _args: [str]) -> Result:
@@ -602,5 +617,10 @@ class Shell:
             print("ERROR: /attach debugger first.")
             return self.Result.HANDLED
 
-        self._debugger_context.break_at_start()
+        self._debugger_context.restart_and_break_at_start()
         return self.Result.HANDLED
+
+    def _attach_debugger(self):
+        if not self._debugger_context:
+            self._debugger_context = Debugger(self._conn)
+            self._debugger_context.attach()

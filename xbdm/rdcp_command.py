@@ -285,7 +285,7 @@ class AltAddr(_ProcessedCommand):
 class _Break(_ProcessedCommand):
     """Manages breakpoints."""
 
-    class Response(_ProcessedResponse):
+    class Response(_ProcessedRawBodyResponse):
         pass
 
     def __init__(self, handler=None):
@@ -521,6 +521,39 @@ class Dedicate(_ProcessedCommand):
             self.body = b" global"
         elif handler_name:
             self.body = bytes(f' handler="{handler_name}"', "utf-8")
+
+
+class DefTitle(_ProcessedCommand):
+    """???"""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(
+        self,
+        launcher: bool = False,
+        name: Optional[str] = None,
+        directory: Optional[str] = None,
+        handler=None,
+    ):
+        super().__init__("deftitle", response_class=self.Response, handler=handler)
+
+        if not name:
+            self.body = b" none"
+            return
+
+        if launcher:
+            self.body = b" launcher"
+            return
+
+        if not name:
+            raise ValueError("Missing required 'name' parameter.")
+
+        if not directory:
+            raise ValueError("Missing required 'directory' parameter.")
+
+        body = f' name="{name}" dir="{directory}"'
+        self.body = bytes(body, "utf-8")
 
 
 class Delete(_ProcessedCommand):
@@ -2018,26 +2051,52 @@ class Threads(_ProcessedCommand):
         super().__init__("threads", response_class=self.Response, handler=handler)
 
 
-# class Title(_ProcessedCommand):
-#     """???"""
-#
-#     class Response(_ProcessedResponse):
-#         def __init__(self, response: rdcp_response.RDCPResponse):
-#             super().__init__(response)
-#             lines = response.parse_multiline()
-#             self.thread_ids = [int(x.decode("utf-8")) for x in lines]
-#
-#         @property
-#         def _body_str(self) -> str:
-#             return str(self.thread_ids)
-#
-#     def __init__(self, handler=None):
-#         super().__init__("threads", response_class=self.Response, handler=handler)
-#         # [nopersist]
-#         # [dir]
-#         # [persist]
-#         # name
-#         # cmdline
+class LoadOnBootTitle(_ProcessedCommand):
+    """Sets the path to the XBE that will be loaded when rebooting."""
+
+    class Response(_ProcessedResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+            lines = response.parse_multiline()
+            self.thread_ids = [int(x.decode("utf-8")) for x in lines]
+
+        @property
+        def _body_str(self) -> str:
+            return str(self.thread_ids)
+
+    def __init__(
+        self,
+        name: str,
+        directory: Optional[str] = None,
+        command_line: Optional[str] = None,
+        persist: bool = False,
+        handler=None,
+    ):
+        super().__init__("title", response_class=self.Response, handler=handler)
+        if not name:
+            self.body = b" none"
+            return
+
+        body = f' name="{name}"'
+        if directory:
+            body += f' dir="{directory}"'
+        if command_line:
+            body += f' cmdline="{command_line}"'
+        if persist:
+            body += f" persist"
+
+        self.body = bytes(body, "utf-8")
+
+
+class LoadOnBootTitleUnpersist(_ProcessedCommand):
+    """Clears the post-reboot title path."""
+
+    class Response(_ProcessedRawBodyResponse):
+        pass
+
+    def __init__(self, handler=None):
+        super().__init__("title", response_class=self.Response, handler=handler)
+        self.body = b" nopersist"
 
 
 class UserList(_ProcessedCommand):

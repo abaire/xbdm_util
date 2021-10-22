@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 
 from xbdm import rdcp_command
@@ -79,8 +80,30 @@ class Debugger:
 
         self._connection.send_rdcp_command(rdcp_command.Threads(self._on_threads))
 
-    def break_at_start(self):
+    def debug_xbe(
+        self, path: str, command_line: Optional[str] = None, persist: bool = False
+    ):
+        """Runs the given XBE and breaks at the entry address."""
+
+        dir_name = os.path.dirname(path)
+        xbe_name = os.path.basename(path)
+        self._connection.send_rdcp_command(
+            (
+                rdcp_command.LoadOnBootTitle(
+                    name=xbe_name,
+                    directory=dir_name,
+                    command_line=command_line,
+                    persist=persist,
+                )
+            )
+        )
+        self._restart_and_attach()
+
+    def restart_and_break_at_start(self):
         """Reboots the current XBE and breaks at the entry address."""
+        self._restart_and_attach()
+
+    def _restart_and_attach(self):
         self._connection.send_rdcp_command(
             rdcp_command.Reboot(
                 rdcp_command.Reboot.FLAG_STOP | rdcp_command.Reboot.FLAG_WAIT
