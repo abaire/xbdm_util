@@ -1,10 +1,10 @@
 """Provides higher level functions for step-debugging functionality."""
 from __future__ import annotations
 
+import collections
 import logging
 import os
-import typing
-
+import re
 import time
 
 from xbdm import rdcp_command
@@ -67,6 +67,113 @@ class Thread:
         self.create_time = response.create
 
 
+def _match_hex(key: str) -> str:
+    """Returns a string containing a regex matching key=<hex_or_integer_string>"""
+    return f"{key}=((?:0x)?[0-9a-fA-F]+)"
+
+
+class Module:
+    def __init__(
+        self,
+        name: str,
+        base_address: int,
+        size: int,
+        checksum: int,
+        timestamp: int,
+        attributes: Optional[Iterable[str]] = None,
+    ):
+        self.name = name
+        self.base_address = base_address
+        self.size = size
+        self.checksum = checksum
+        self.timestamp = timestamp
+        self.attributes = attributes
+
+    def __str__(self):
+        if self.attributes:
+            attribute_str = " " + " ".join(sorted(self.attributes))
+        else:
+            attribute_str = ""
+
+        return "%s: %s Mem: 0x%X - 0x%X (%d) Check: 0x%08X%s" % (
+            self.__class__.__name__,
+            self.name,
+            self.base_address,
+            self.base_address + self.size,
+            self.size,
+            self.checksum,
+            attribute_str,
+        )
+
+    # 'name="XShell_new.exe" base=0x00010bc0 size=0x001c5880 check=0x00000000 timestamp=0x00000000 tls xbe'
+    _RE = re.compile(
+        r"name=\"([^\"]+)\"\s+"
+        + r"\s+".join([_match_hex(x) for x in ["base", "size", "check", "timestamp"]])
+        + r"\s*(.*)"
+    )
+
+    @classmethod
+    def parse(cls, message: str) -> Optional[Module]:
+        match = cls._RE.match(message)
+        if not match:
+            return None
+
+        attributes = None
+        if match.group(6):
+            attributes = match.group(6).split(" ")
+
+        return cls(
+            name=match.group(1),
+            base_address=int(match.group(2), 0),
+            size=int(match.group(3), 0),
+            checksum=int(match.group(4), 0),
+            timestamp=int(match.group(5), 0),
+            attributes=attributes,
+        )
+
+
+class Section:
+    def __init__(
+        self, name: str, base_address: int, size: int, index: int, flags: int = 0
+    ):
+        self.name = name
+        self.base_address = base_address
+        self.size = size
+        self.index = index
+        self.flags = flags
+
+    def __str__(self):
+        return "%s: %s @%d Flags: 0x08%X Mem: 0x%X - 0x%X (%d)" % (
+            self.__class__.__name__,
+            self.name,
+            self.size,
+            self.flags,
+            self.base_address,
+            self.base_address + self.size,
+            self.size,
+        )
+
+    # 'name="XONLINE" base=0x00011000 size=0x00054eec index=0 flags=1'
+    _RE = re.compile(
+        r"name=\"([^\"]+)\"\s+"
+        + r"\s+".join([_match_hex(x) for x in ["base", "size", "index", "flags"]])
+    )
+
+    @classmethod
+    def parse(cls, message: str) -> Optional[Section]:
+        match = cls._RE.match(message)
+        if not match:
+            return None
+
+        return cls(
+            name=match.group(1),
+            base_address=int(match.group(2), 0),
+            size=int(match.group(3), 0),
+            index=int(match.group(4), 0),
+            flags=int(match.group(5), 0),
+        )
+
+
 class Debugger:
     """Provides high level debugger functionality."""
 
@@ -76,7 +183,13 @@ class Debugger:
 
         self._notification_handler_map = self._build_notification_handler_map()
 
+        self._debugstr_re = re.compile(r"thread=(\d+)\s+(cr|lf|crlf)?\s+string=(.+)")
+        self._debugstr_accumulator = collections.defaultdict(str)
+
         self._threads: Dict[int, Thread] = {}
+        self._module_table: Dict[str, Module] = {}
+        self._section_table: Dict[int, Section] = {}
+
         self._notification_channel_connected = False
         self._hello_received = False
 
@@ -234,7 +347,6 @@ class Debugger:
         }
 
     def _on_notification(self, message: str):
-        logger.debug(f"DEBUGGER NOTIFICATION: '{message}'")
         self._notification_channel_connected = True
 
         if message == "hello":
@@ -247,30 +359,61 @@ class Debugger:
                 handler(message[len(key) :])
                 return
 
+        logger.warning(f"UNHANDLED DEBUGGER NOTIFICATION: '{message}'")
+
     def _process_vx(self, message):
         print(f"VX: {message}")
         # 'event <Event Id="Xbe" Time="0x01d7c7c10fe720e0" Severity="1" TCR="" Description="\Device\Harddisk0\Partition2\xshell.xbe"/>'
         # 'event <Event Id="Xtl" Time="0x01d7c7c10fe7e430" Severity="1" TCR="" Description="XTL imports resolved"/>'
 
     def _process_debugstr(self, message):
-        print(f"DBGSTR: {message}")
-        # 'thread=4 lf string=VX: INFO \Device\Harddisk0\Partition2\xshell.xbe'
+        match = self._debugstr_re.match(message)
+        if not match:
+            logger.error(f"FAILED TO MATCH DBGSTR: {message}")
+            return
+
+        thread_id = int(match.group(1), 0)
+        text = match.group(3)
+
+        # If the string isn't flushed, accumulate it until it is
+        if not match.group(2):
+            self._debugstr_accumulator[thread_id] += text
+            return
+
+        previous_buffer = self._debugstr_accumulator.get(thread_id) or ""
+        self._debugstr_accumulator[thread_id] = ""
+        text = previous_buffer + text
+
+        print("DBG[%03d]> %s" % (thread_id, text))
 
     def _process_modload(self, message):
-        print(f"MODLOAD: {message}")
-        # 'name="XShell_new.exe" base=0x00010bc0 size=0x001c5880 check=0x00000000 timestamp=0x00000000 tls xbe'
+        mod = Module.parse(message)
+        if not mod:
+            logger.error(f"FAILED TO MATCH MODLOAD: {message}")
+            return
+        self._module_table[mod.name] = mod
 
     def _process_sectload(self, message):
-        print(f"SECTLOAD: {message}")
-        # 'name="XONLINE" base=0x00011000 size=0x00054eec index=0 flags=1'
+        sect = Section.parse(message)
+        if not sect:
+            logger.error(f"FAILED TO MATCH SECTLOAD: {message}")
+            return
+        self._section_table[sect.index] = sect
 
     def _process_create_thread(self, message):
         print(f"CREATE_THREAD: {message}")
         # thread=12 start=0x00078f2d
 
     def _process_execution_state_change(self, message):
-        print(f"EXECUTION STATE CHANGE: {message}")
         self._last_xbdm_execution_state = message
+
+        if message == "rebooting":
+            logger.debug("Received reboot notification")
+            self._hello_received = False
+            self._module_table.clear()
+            self._section_table.clear()
+            return
+        print(f"EXECUTION STATE CHANGE: {message}")
         # rebooting
         # pending
         # started
