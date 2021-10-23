@@ -200,7 +200,7 @@ class XBDMDialog(wx.Dialog):
         # self._bridge.send_rdcp_command(cmd)
 
         cmd = rdcp_command.Reboot(rdcp_command.Reboot.FLAG_WARM, handler=print)
-        self._bridge.send_rdcp_command(cmd)
+        self._bridge.send_command(cmd)
 
         # cmd = rdcp_command.Mkdir("e:\\Tools\\TestDir", handler=print)
         # self._bridge.send_rdcp_command(cmd)
@@ -257,7 +257,7 @@ class XBDMDialog(wx.Dialog):
         cmd = rdcp_command.RDCPCommand(
             command, response_handler=self._on_command_response
         )
-        self._bridge.send_rdcp_command(cmd)
+        self._bridge.send_command(cmd)
 
     def _on_command_response(self, response: rdcp_response.RDCPResponse):
         logging.info(response)
@@ -270,7 +270,7 @@ class XBDMDialog(wx.Dialog):
             response.drives[0],
             lambda r: self._on_drive_free_space(response.drives[0], r),
         )
-        self._bridge.send_rdcp_command(cmd)
+        self._bridge.send_command(cmd)
         return False
 
     def _on_drive_free_space(

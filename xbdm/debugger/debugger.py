@@ -19,7 +19,31 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
-class Thread:
+class _XBDMClient:
+    """Provides functionality for communicating with an XBDMConnection."""
+
+    def __init__(self, connection: XBDMConnection):
+        self._connection = connection
+
+    def _call(
+        self, cmd: rdcp_command.ProcessedCommand
+    ) -> rdcp_command.ProcessedResponseCatcher:
+        """Sends a command to the underlying connection and waits for the response."""
+        response = self._call_async(cmd)
+        self._connection.await_empty_queue()
+        return response
+
+    def _call_async(
+        self, cmd: rdcp_command.ProcessedCommand
+    ) -> rdcp_command.ProcessedResponseCatcher:
+        """Sends a command to the underlying connection and immediately returns a handler that will eventually receive the result."""
+        response = rdcp_command.ProcessedResponseCatcher()
+        cmd.set_handler(response)
+        self._connection.send_command(cmd)
+        return response
+
+
+class Thread(_XBDMClient):
     """Encapsulates information about a thread."""
 
     class Context:
@@ -31,11 +55,13 @@ class Thread:
     class FullContext(Context):
         pass
 
-    def __init__(self, thread_id: int, connection: XBDMConnection):
-        self.thread_id = thread_id
-        self._connection = connection
+    _TRAP_FLAG = 0x100
 
-        self.suspended: Optional[bool] = None
+    def __init__(self, thread_id: int, connection: XBDMConnection):
+        super().__init__(connection)
+        self.thread_id = thread_id
+
+        self.suspend_count: Optional[int] = None
         self.priority: Optional[int] = None
         self.thread_local_storage_addr: Optional[int] = None
         self.start_addr: Optional[int] = None
@@ -51,7 +77,7 @@ class Thread:
         lines = [
             f"Thread: {self.thread_id}",
             "  Priority: %d %s"
-            % (self.priority, "[Suspended]" if self.suspended else ""),
+            % (self.priority, "[SuspendCount]" if self.suspend_count else ""),
             "  Base : 0x%X" % (self.base_addr or 0),
             "  Start: 0x%X" % (self.start_addr or 0),
             "  Thread Local Base: 0x%X" % (self.thread_local_storage_addr or 0),
@@ -61,15 +87,11 @@ class Thread:
         return "\n".join(lines)
 
     def get_info(self):
-        self._connection.send_rdcp_command(
-            rdcp_command.ThreadInfo(self.thread_id, self._on_thread_info)
-        )
-        self._connection.await_empty_queue()
+        response = self._call(rdcp_command.ThreadInfo(self.thread_id))
 
-    def _on_thread_info(self, response: rdcp_command.ThreadInfo.Response):
         assert response.ok
 
-        self.suspended = response.suspend
+        self.suspend_count = response.suspend
         self.priority = response.priority
         self.thread_local_storage_addr = response.tlsbase
         self.start_addr = response.start
@@ -79,34 +101,63 @@ class Thread:
         self.create_time = response.create
 
     def get_context(self) -> Optional[Context]:
-        ret = []
-
-        def _handler(response: rdcp_command.GetContext):
-            ret.append(response)
-
-        self._connection.send_rdcp_command(
-            rdcp_command.GetContext(
-                self.thread_id, enable_full=True, enable_fp=True, handler=_handler
-            )
+        response = self._call(
+            rdcp_command.GetContext(self.thread_id, enable_full=True, enable_fp=True)
         )
-        self._connection.await_empty_queue()
-        if not ret:
+        if not response.ok:
             return None
-        return self.Context(ret[0].registers)
+        return self.Context(response.registers)
 
     def get_full_context(self) -> Optional[FullContext]:
-        ret = []
-
-        def _handler(response: rdcp_command.GetContext):
-            ret.append(response)
-
-        self._connection.send_rdcp_command(
-            rdcp_command.GetContext(
-                self.thread_id, enable_full=True, enable_fp=True, handler=_handler
-            )
+        response = self._call(
+            rdcp_command.GetContext(self.thread_id, enable_full=True, enable_fp=True)
         )
-        self._connection.await_empty_queue()
+        if not response.ok:
+            return None
+        print("TODO: FINISHME")  # TODO: FINISHME
         return None
+
+    def set_step_instruction_mode(self, enabled: bool) -> bool:
+        context = self.get_context()
+        if not context:
+            return False
+
+        old_flags = context.registers["EFlags"]
+        if enabled:
+            new_flags = old_flags | self._TRAP_FLAG
+        else:
+            new_flags = old_flags & self._TRAP_FLAG
+        if new_flags == old_flags:
+            return True
+
+        response = self._call(
+            rdcp_command.SetContext(self.thread_id, {"EFlags": new_flags})
+        )
+        return response.ok
+
+    def continue_once(self, break_on_exceptions: bool = True) -> bool:
+        """Sends a 'continue' command"""
+        response = self._call(
+            rdcp_command.Continue(self.thread_id, exception=break_on_exceptions)
+        )
+        if not response.ok:
+            return False
+        self.get_info()
+        return True
+
+    def halt(self) -> bool:
+        """Sends a 'halt' command"""
+        response = self._call(rdcp_command.Halt(self.thread_id))
+        if not response.ok:
+            return False
+        self.get_info()
+        return True
+
+    def unsuspend(self):
+        """Sends continue commands until suspend count is 0."""
+        self.get_info()
+        while self.suspend_count > 0:
+            self._connection.send_command(rdcp_command.Continue(self.thread_id))
 
 
 def _match_hex(key: str) -> str:
@@ -216,11 +267,11 @@ class Section:
         )
 
 
-class Debugger:
+class Debugger(_XBDMClient):
     """Provides high level debugger functionality."""
 
     def __init__(self, connection: XBDMConnection):
-        self._connection = connection
+        super().__init__(connection)
         self._debug_port = None
 
         self._notification_handler_map = self._build_notification_handler_map()
@@ -281,10 +332,10 @@ class Debugger:
             )
             self._debug_port = listener_addr[1]
 
-        self._connection.send_rdcp_command(
+        self._connection.send_command(
             rdcp_command.NotifyAt(self._debug_port, debug_flag=True)
         )
-        self._connection.send_rdcp_command(rdcp_command.Debugger())
+        self._connection.send_command(rdcp_command.Debugger())
         self.refresh_thread_info()
 
     def debug_xbe(
@@ -295,25 +346,21 @@ class Debugger:
         dir_name = os.path.dirname(path)
         xbe_name = os.path.basename(path)
 
-        response_catcher: List[rdcp_command.LoadOnBootTitle.Response] = []
-        cmd = rdcp_command.LoadOnBootTitle(
-            name=xbe_name,
-            directory=dir_name,
-            command_line=command_line,
-            persist=persist,
-            handler=lambda x: response_catcher.append(x),
+        response = self._call(
+            rdcp_command.LoadOnBootTitle(
+                name=xbe_name,
+                directory=dir_name,
+                command_line=command_line,
+                persist=persist,
+            )
         )
-        self._connection.send_rdcp_command(cmd)
-        self._connection.await_empty_queue()
-
-        response = response_catcher[0]
         if not response.ok:
             print(response.pretty_message)
             return
 
         self._restart_and_attach()
 
-    def break_at_start(self):
+    def restart(self):
         """Reboots the current XBE and breaks at the entry address."""
         self._restart_and_attach()
 
@@ -325,21 +372,14 @@ class Debugger:
             print("No active thread context")
             return False
 
-        self._connection.send_rdcp_command(
-            rdcp_command.FuncCall(self._active_thread_id)
-        )
-        self._connection.await_empty_queue()
-        return True
+        response = self._call(rdcp_command.FuncCall(self._active_thread_id))
+        return response.ok
 
     def refresh_thread_info(self):
-        new_thread_ids = set()
+        response = self._call(rdcp_command.Threads())
 
-        def _on_threads(response: rdcp_command.Threads.Response):
-            assert response.ok
-            new_thread_ids.update(response.thread_ids)
-
-        self._connection.send_rdcp_command(rdcp_command.Threads(_on_threads))
-        self._connection.await_empty_queue()
+        assert response.ok
+        new_thread_ids = set(response.thread_ids)
 
         known_threads = set(self._threads.keys())
 
@@ -370,12 +410,12 @@ class Debugger:
         return thread.get_full_context()
 
     def _restart_and_attach(self):
-        self._connection.send_rdcp_command(
+        response = self._call(
             rdcp_command.Reboot(
                 rdcp_command.Reboot.FLAG_STOP | rdcp_command.Reboot.FLAG_WAIT
             )
         )
-        self._connection.await_empty_queue()
+        assert response.ok
 
         self._notification_channel_connected = False
         self._hello_received = False
@@ -413,12 +453,12 @@ class Debugger:
                 )
                 return
 
-        self._connection.send_rdcp_command(rdcp_command.Debugger())
+        self._connection.send_command(rdcp_command.Debugger())
 
         # Set a breakpoint at the entry to the program and continue forward
         # until it is hit.
-        self._connection.send_rdcp_command(rdcp_command.BreakAtStart())
-        self._connection.send_rdcp_command(rdcp_command.Go())
+        self._connection.send_command(rdcp_command.BreakAtStart())
+        self._connection.send_command(rdcp_command.Go())
 
     def _build_notification_handler_map(self) -> Dict[str, Callable[[str], None]]:
         return {

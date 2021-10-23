@@ -13,103 +13,122 @@ from . import rdcp_response
 logger = logging.getLogger(__name__)
 
 
+class ProcessedResponseCatcher:
+    """Captures a ProcessedResponse derived object and proxies it."""
+
+    def __init__(self):
+        self.response: Optional[_ProcessedResponse] = None
+
+    def __call__(self, *args, **kwargs):
+        self.response = args[0]
+
+    def __getattr__(self, item):
+        assert self.response is not None
+        return getattr(self.response, item)
+
+    @property
+    def has_response(self) -> bool:
+        return self.response is not None
+
+
+# COMMANDS = {
+#     "adminpw",
+#     "altaddr",  #  > addr=0x0a000210
+#     "authuser",  # (resp=QWORD name=STRING) > 414:access denied  # Looks like "passwd" is another param maybe for an older XDK?
+#     # "boxid",  # Can only be executed if security is enabled.
+#     "capctrl",  # "start" or none - starts or stops profiling capture
+#     "crashdump",
+#     "d3dopcode",
+#     "debugger",
+#     "debugmode",
+#     "dedicate",
+#     "deftitle",
+#     "delete",
+#     "dirlist",
+#     "dmversion",
+#     "drivefreespace",
+#     "drivelist",
+#     "dvdblk",
+#     "dvdperf",
+#     "fileeof",
+#     "flash",
+#     "fmtfat",
+#     "funccall",
+#     "getcontext",
+#     "getd3dstate",
+#     "getextcontext",
+#     "getfile",
+#     "getfileattributes",
+#     "getgamma",
+#     "getmem",
+#     "getmem2",
+#     "getpalette",
+#     "getpid",
+#     "getsum",
+#     "getsurf",
+#     "getuserpriv",
+#     "getutildrvinfo",
+#     "go",
+#     "gpucount",
+#     "halt",
+#     "irtsweep",
+#     "isbreak",
+#     "isdebugger",
+#     "isstopped",
+#     "kd",
+#     "keyxchg",
+#     "lockmode",
+#     "lop",
+#     "magicboot",
+#     "memtrack",
+#     "mkdir",
+#     "mmglobal",
+#     "modlong",
+#     "modsections",
+#     "modules",
+#     "nostopon",
+#     "notify",
+#     "notifyat",
+#     "pbsnap",
+#     "pclist",
+#     "pdbinfo",
+#     "pssnap",
+#     "querypc",
+#     "reboot",
+#     "rename",
+#     "resume",
+#     "screenshot",
+#     "sendfile",
+#     "servname",
+#     "setconfig",
+#     "setcontext",
+#     "setfileattributes",
+#     "setsystime",
+#     "setuserpriv",
+#     "signcontent",
+#     "stop",
+#     "stopon",
+#     "suspend",
+#     "sysfileupd",
+#     "systime",  # high=0x1d7c3df low=0xb7852a80
+#     "threadinfo",
+#     "threads",
+#     "title",
+#     "user",
+#     "userlist",
+#     "vssnap",
+#     "walkmem",
+#     "writefile",
+#     "xbeinfo",
+#     "xtlinfo",
+# }
+
+
 class RDCPCommand:
     """Models a Remote Debugging and Control Protocol command."""
 
     TERMINATOR = b"\r\n"
     STR_BODY_CUTOFF = 16
-
-    # COMMANDS = {
-    #     "adminpw",
-    #     "altaddr",  #  > addr=0x0a000210
-    #     "authuser",  # (resp=QWORD name=STRING) > 414:access denied  # Looks like "passwd" is another param maybe for an older XDK?
-    #     # "boxid",  # Can only be executed if security is enabled.
-    #     "capctrl",  # "start" or none - starts or stops profiling capture
-    #     "crashdump",
-    #     "d3dopcode",
-    #     "debugger",
-    #     "debugmode",
-    #     "dedicate",
-    #     "deftitle",
-    #     "delete",
-    #     "dirlist",
-    #     "dmversion",
-    #     "drivefreespace",
-    #     "drivelist",
-    #     "dvdblk",
-    #     "dvdperf",
-    #     "fileeof",
-    #     "flash",
-    #     "fmtfat",
-    #     "funccall",
-    #     "getcontext",
-    #     "getd3dstate",
-    #     "getextcontext",
-    #     "getfile",
-    #     "getfileattributes",
-    #     "getgamma",
-    #     "getmem",
-    #     "getmem2",
-    #     "getpalette",
-    #     "getpid",
-    #     "getsum",
-    #     "getsurf",
-    #     "getuserpriv",
-    #     "getutildrvinfo",
-    #     "go",
-    #     "gpucount",
-    #     "halt",
-    #     "irtsweep",
-    #     "isbreak",
-    #     "isdebugger",
-    #     "isstopped",
-    #     "kd",
-    #     "keyxchg",
-    #     "lockmode",
-    #     "lop",
-    #     "magicboot",
-    #     "memtrack",
-    #     "mkdir",
-    #     "mmglobal",
-    #     "modlong",
-    #     "modsections",
-    #     "modules",
-    #     "nostopon",
-    #     "notify",
-    #     "notifyat",
-    #     "pbsnap",
-    #     "pclist",
-    #     "pdbinfo",
-    #     "pssnap",
-    #     "querypc",
-    #     "reboot",
-    #     "rename",
-    #     "resume",
-    #     "screenshot",
-    #     "sendfile",
-    #     "servname",
-    #     "setconfig",
-    #     "setcontext",
-    #     "setfileattributes",
-    #     "setsystime",
-    #     "setuserpriv",
-    #     "signcontent",
-    #     "stop",
-    #     "stopon",
-    #     "suspend",
-    #     "sysfileupd",
-    #     "systime",  # high=0x1d7c3df low=0xb7852a80
-    #     "threadinfo",
-    #     "threads",
-    #     "title",
-    #     "user",
-    #     "userlist",
-    #     "vssnap",
-    #     "walkmem",
-    #     "writefile",
-    #     "xbeinfo",
-    #     "xtlinfo",
-    # }
 
     def __init__(
         self,
@@ -193,7 +212,7 @@ class RDCPBinaryPayload(RDCPCommand):
         return self.payload
 
 
-class _ProcessedCommand(RDCPCommand):
+class ProcessedCommand(RDCPCommand):
     """Processes the response to the command in some command-specific way."""
 
     def __init__(self, command, response_class, handler=None, **kw):
@@ -259,7 +278,7 @@ class _ProcessedRawBodyResponse(_ProcessedResponse):
         return self._body.decode("utf-8")
 
 
-class AltAddr(_ProcessedCommand):
+class AltAddr(ProcessedCommand):
     """Returns the Game Configuration IP."""
 
     class Response(_ProcessedResponse):
@@ -283,7 +302,7 @@ class AltAddr(_ProcessedCommand):
         super().__init__("altaddr", response_class=self.Response, handler=handler)
 
 
-class _Break(_ProcessedCommand):
+class _Break(ProcessedCommand):
     """Manages breakpoints."""
 
     class Response(_ProcessedRawBodyResponse):
@@ -366,7 +385,7 @@ class BreakOnExecute(_BreakRange):
         super().__init__("execute", address, size, clear, handler)
 
 
-class Bye(_ProcessedCommand):
+class Bye(ProcessedCommand):
     """Closes the connection gracefully."""
 
     class Response(_ProcessedResponse):
@@ -376,7 +395,7 @@ class Bye(_ProcessedCommand):
         super().__init__("bye", response_class=self.Response, handler=handler)
 
 
-class ProfilerCaptureControl(_ProcessedCommand):
+class ProfilerCaptureControl(ProcessedCommand):
     """Starts or stops profiling capture."""
 
     class Response(_ProcessedRawBodyResponse):
@@ -388,7 +407,7 @@ class ProfilerCaptureControl(_ProcessedCommand):
             self.body = b" start"
 
 
-class Continue(_ProcessedCommand):
+class Continue(ProcessedCommand):
     """Continues execution of the given thread."""
 
     class Response(_ProcessedResponse):
@@ -412,7 +431,7 @@ class Continue(_ProcessedCommand):
 #         super().__init__("crashdump", response_class=self.Response, handler=handler)
 
 
-class DbgnameGet(_ProcessedCommand):
+class DbgnameGet(ProcessedCommand):
     """Gets the XBOX devkit name."""
 
     class Response(_ProcessedResponse):
@@ -435,7 +454,7 @@ class DbgnameGet(_ProcessedCommand):
         super().__init__("dbgname", response_class=self.Response, handler=handler)
 
 
-class DbgnameSet(_ProcessedCommand):
+class DbgnameSet(ProcessedCommand):
     """Sets the XBOX devkit name."""
 
     class Response(_ProcessedResponse):
@@ -447,7 +466,7 @@ class DbgnameSet(_ProcessedCommand):
             self.body = bytes(f' name="{new_name}"', "utf-8")
 
 
-class DbgOptions(_ProcessedCommand):
+class DbgOptions(ProcessedCommand):
     """Sets or gets the "crashdump" and "dpctrace" flags."""
 
     class Response(_ProcessedResponse):
@@ -488,7 +507,7 @@ class DbgOptions(_ProcessedCommand):
             self._body = bytes(f" {setter_str}", "utf-8")
 
 
-class Debugger(_ProcessedCommand):
+class Debugger(ProcessedCommand):
     """Connects or disconnects the debugger."""
 
     class Response(_ProcessedResponse):
@@ -500,7 +519,7 @@ class Debugger(_ProcessedCommand):
         self.body = bytes(f" {cmd}", "utf-8")
 
 
-class DebugMode(_ProcessedCommand):
+class DebugMode(ProcessedCommand):
     """?Enables debugmode flags?."""
 
     class Response(_ProcessedResponse):
@@ -510,7 +529,7 @@ class DebugMode(_ProcessedCommand):
         super().__init__("debugmode", response_class=self.Response, handler=handler)
 
 
-class Dedicate(_ProcessedCommand):
+class Dedicate(ProcessedCommand):
     """Sets connection as dedicated."""
 
     class Response(_ProcessedRawBodyResponse):
@@ -524,7 +543,7 @@ class Dedicate(_ProcessedCommand):
             self.body = bytes(f' handler="{handler_name}"', "utf-8")
 
 
-class DefTitle(_ProcessedCommand):
+class DefTitle(ProcessedCommand):
     """???"""
 
     class Response(_ProcessedRawBodyResponse):
@@ -557,7 +576,7 @@ class DefTitle(_ProcessedCommand):
         self.body = bytes(body, "utf-8")
 
 
-class Delete(_ProcessedCommand):
+class Delete(ProcessedCommand):
     """Deletes a file."""
 
     class Response(_ProcessedRawBodyResponse):
@@ -573,7 +592,7 @@ class Delete(_ProcessedCommand):
         self.body = bytes(f' name="{path}"{dir_flag}', "utf-8")
 
 
-class DirList(_ProcessedCommand):
+class DirList(ProcessedCommand):
     """Lists contents of a path."""
 
     class Response(_ProcessedResponse):
@@ -616,7 +635,7 @@ class DirList(_ProcessedCommand):
         self.body = bytes(f' name="{name}"', "utf-8")
 
 
-class DMVersion(_ProcessedCommand):
+class DMVersion(ProcessedCommand):
     """Returns the debug monitor version."""
 
     class Response(_ProcessedResponse):
@@ -637,7 +656,7 @@ class DMVersion(_ProcessedCommand):
         super().__init__("dmversion", response_class=self.Response, handler=handler)
 
 
-class DriveFreeSpace(_ProcessedCommand):
+class DriveFreeSpace(ProcessedCommand):
     """Returns the amount of free space on a drive."""
 
     class Response(_ProcessedResponse):
@@ -679,7 +698,7 @@ class DriveFreeSpace(_ProcessedCommand):
         self.body = bytes(f' name="{drive_letter}:\\"', "utf-8")
 
 
-class DriveList(_ProcessedCommand):
+class DriveList(ProcessedCommand):
     """Lists mounted drives on the XBOX."""
 
     class Response(_ProcessedResponse):
@@ -699,7 +718,7 @@ class DriveList(_ProcessedCommand):
         super().__init__("drivelist", response_class=self.Response, handler=handler)
 
 
-class FuncCall(_ProcessedCommand):
+class FuncCall(ProcessedCommand):
     """??? thread must be stopped, just returns OK"""
 
     class Response(_ProcessedRawBodyResponse):
@@ -710,7 +729,7 @@ class FuncCall(_ProcessedCommand):
         self.body = bytes(f" thread={thread_id}", "utf-8")
 
 
-class GetContext(_ProcessedCommand):
+class GetContext(ProcessedCommand):
     """Gets the register context for the given thread."""
 
     class Response(_ProcessedResponse):
@@ -777,7 +796,7 @@ class GetContext(_ProcessedCommand):
         self.body = bytes(f" thread={thread_id_str}{flags}", "utf-8")
 
 
-class GetD3DState(_ProcessedCommand):
+class GetD3DState(ProcessedCommand):
     """Retrieves the current D3D state."""
 
     class Response(_ProcessedResponse):
@@ -810,7 +829,7 @@ class GetD3DState(_ProcessedCommand):
         self._binary_response_length = 1180
 
 
-class GetExtContext(_ProcessedCommand):
+class GetExtContext(ProcessedCommand):
     """Gets thread context information as a struct."""
 
     class Response(_ProcessedResponse):
@@ -844,7 +863,7 @@ class GetExtContext(_ProcessedCommand):
         )
 
 
-class GetFile(_ProcessedCommand):
+class GetFile(ProcessedCommand):
     """Retrieves the content of a file."""
 
     class Response(_ProcessedRawBodyResponse):
@@ -882,7 +901,7 @@ class GetFile(_ProcessedCommand):
         )
 
 
-class GetFileAttributes(_ProcessedCommand):
+class GetFileAttributes(ProcessedCommand):
     """Retrieves attributes of a file."""
 
     class Response(_ProcessedResponse):
@@ -940,7 +959,7 @@ class GetFileAttributes(_ProcessedCommand):
         self.body = bytes(f' name="{name}"', "utf-8")
 
 
-class GetGamma(_ProcessedCommand):
+class GetGamma(ProcessedCommand):
     """Retrieves gamma information."""
 
     class Response(_ProcessedResponse):
@@ -970,7 +989,7 @@ class GetGamma(_ProcessedCommand):
         self._binary_response_length = 768
 
 
-class GetMem(_ProcessedCommand):
+class GetMem(ProcessedCommand):
     """Gets the contents of a block of memory."""
 
     class Response(_ProcessedResponse):
@@ -1000,7 +1019,7 @@ class GetMem(_ProcessedCommand):
         self.body = bytes(f" addr={addr} length={length}", "utf-8")
 
 
-class GetMemBinary(_ProcessedCommand):
+class GetMemBinary(ProcessedCommand):
     """Gets the contents of a block of memory as a binary chunk."""
 
     class Response(_ProcessedResponse):
@@ -1034,7 +1053,7 @@ class GetMemBinary(_ProcessedCommand):
         self.body = bytes(f" ADDR={addr} LENGTH={length}", "utf-8")
 
 
-class GetPalette(_ProcessedCommand):
+class GetPalette(ProcessedCommand):
     """Retrieves palette information (D3DINT_GET_PALETTE)."""
 
     class Response(_ProcessedRawBodyResponse):
@@ -1046,7 +1065,7 @@ class GetPalette(_ProcessedCommand):
         self.body = bytes(" STAGE=0x%X" % stage, "utf-8")
 
 
-class GetProcessID(_ProcessedCommand):
+class GetProcessID(ProcessedCommand):
     """Retrieves the ID of the currently running process (must be debuggable)."""
 
     class Response(_ProcessedResponse):
@@ -1069,7 +1088,7 @@ class GetProcessID(_ProcessedCommand):
         super().__init__("getpid", response_class=self.Response, handler=handler)
 
 
-class GetChecksum(_ProcessedCommand):
+class GetChecksum(ProcessedCommand):
     """Returns the checksum for a memory region."""
 
     class Response(_ProcessedResponse):
@@ -1104,7 +1123,7 @@ class GetChecksum(_ProcessedCommand):
         self._binary_response_length = 384 // blocksize
 
 
-class GetSurface(_ProcessedCommand):
+class GetSurface(ProcessedCommand):
     """???"""
 
     class Response(_ProcessedRawBodyResponse):
@@ -1115,7 +1134,7 @@ class GetSurface(_ProcessedCommand):
         self.body = bytes(f" id=0x%X" % surface_id, "utf-8")
 
 
-class GetUserPrivileges(_ProcessedCommand):
+class GetUserPrivileges(ProcessedCommand):
     """Gets the privilege flags for a user."""
 
     class Response(_ProcessedResponse):
@@ -1145,7 +1164,7 @@ class GetUserPrivileges(_ProcessedCommand):
             self.body = bytes(f' name="{username}"', "utf-8")
 
 
-class GetUtilityDriveInfo(_ProcessedCommand):
+class GetUtilityDriveInfo(ProcessedCommand):
     """Gets information about the mounted utility partitions."""
 
     class Response(_ProcessedResponse):
@@ -1173,7 +1192,7 @@ class GetUtilityDriveInfo(_ProcessedCommand):
         )
 
 
-class Go(_ProcessedCommand):
+class Go(ProcessedCommand):
     """Resumes execution of all threads."""
 
     class Response(_ProcessedRawBodyResponse):
@@ -1183,7 +1202,7 @@ class Go(_ProcessedCommand):
         super().__init__("go", response_class=self.Response, handler=handler)
 
 
-class GPUCounter(_ProcessedCommand):
+class GPUCounter(ProcessedCommand):
     """Enables or disables GPU performance counters."""
 
     class Response(_ProcessedResponse):
@@ -1194,7 +1213,7 @@ class GPUCounter(_ProcessedCommand):
         self.body = b" enable" if enable else b" disable"
 
 
-class Halt(_ProcessedCommand):
+class Halt(ProcessedCommand):
     """Halts execution of the given thread."""
 
     class Response(_ProcessedRawBodyResponse):
@@ -1205,7 +1224,7 @@ class Halt(_ProcessedCommand):
         self.body = bytes(f" thread={thread_id}", "utf-8")
 
 
-class IsBreak(_ProcessedCommand):
+class IsBreak(ProcessedCommand):
     """Checks to see if a breakpoint is set at the given address."""
 
     class Response(_ProcessedResponse):
@@ -1248,7 +1267,7 @@ class IsBreak(_ProcessedCommand):
         self.body = bytes(f" addr={addr_str}", "utf-8")
 
 
-class IsDebugger(_ProcessedCommand):
+class IsDebugger(ProcessedCommand):
     """Checks to see if the debugger is allowed to attach?"""
 
     class Response(_ProcessedRawBodyResponse):
@@ -1258,7 +1277,7 @@ class IsDebugger(_ProcessedCommand):
         super().__init__("isdebugger", response_class=self.Response, handler=handler)
 
 
-class IsStopped(_ProcessedCommand):
+class IsStopped(ProcessedCommand):
     """Checks to see if the given thread is stopped."""
 
     class Response(_ProcessedRawBodyResponse):
@@ -1270,7 +1289,7 @@ class IsStopped(_ProcessedCommand):
         self.body = bytes(f" thread={thread_id}", "utf-8")
 
 
-class IRTSweep(_ProcessedCommand):
+class IRTSweep(ProcessedCommand):
     """???"""
 
     class Response(_ProcessedRawBodyResponse):
@@ -1280,7 +1299,7 @@ class IRTSweep(_ProcessedCommand):
         super().__init__("irtsweep", response_class=self.Response, handler=handler)
 
 
-class KernelDebug(_ProcessedCommand):
+class KernelDebug(ProcessedCommand):
     """Configures the KD."""
 
     class Mode(enum.Enum):
@@ -1308,7 +1327,7 @@ class KernelDebug(_ProcessedCommand):
 #         self._binary_payload = keydata
 
 
-class LOP(_ProcessedCommand):
+class LOP(ProcessedCommand):
     """Profiler command???"""
 
     class Command(enum.Enum):
@@ -1331,7 +1350,7 @@ class LOP(_ProcessedCommand):
             self.body += bytes("0x%X" % command_data, "utf-8")
 
 
-class MagicBoot(_ProcessedCommand):
+class MagicBoot(ProcessedCommand):
     """Triggers a boot/reboot."""
 
     class Response(_ProcessedRawBodyResponse):
@@ -1353,7 +1372,7 @@ class MagicBoot(_ProcessedCommand):
         self.body = bytes(f' title="{title}"{flags}', "utf-8")
 
 
-class MemTrack(_ProcessedCommand):
+class MemTrack(ProcessedCommand):
     """???."""
 
     class Command(enum.Enum):
@@ -1385,7 +1404,7 @@ class MemTrack(_ProcessedCommand):
             self.body += bytes(" type=0x%X" % command_args, "utf-8")
 
 
-class MemoryMapGlobal(_ProcessedCommand):
+class MemoryMapGlobal(ProcessedCommand):
     """Returns info about the global memory map."""
 
     class Response(_ProcessedResponse):
@@ -1450,7 +1469,7 @@ class MemoryMapGlobal(_ProcessedCommand):
         super().__init__("mmglobal", response_class=self.Response, handler=handler)
 
 
-class Mkdir(_ProcessedCommand):
+class Mkdir(ProcessedCommand):
     """Creates a directory."""
 
     class Response(_ProcessedRawBodyResponse):
@@ -1461,7 +1480,7 @@ class Mkdir(_ProcessedCommand):
         self.body = bytes(f' name="{name}"', "utf-8")
 
 
-class ModLongName(_ProcessedCommand):
+class ModLongName(ProcessedCommand):
     """??? 'no long name available'"""
 
     class Response(_ProcessedResponse):
@@ -1472,7 +1491,7 @@ class ModLongName(_ProcessedCommand):
         self.body = bytes(f' name="{name}"', "utf-8")
 
 
-class ModSections(_ProcessedCommand):
+class ModSections(ProcessedCommand):
     """Returns information about the sections in the given executable module."""
 
     class Response(_ProcessedResponse):
@@ -1522,7 +1541,7 @@ class ModSections(_ProcessedCommand):
         self.body = bytes(f' name="{name}"', "utf-8")
 
 
-class Modules(_ProcessedCommand):
+class Modules(ProcessedCommand):
     """Returns the currently running executable modules."""
 
     class Response(_ProcessedResponse):
@@ -1571,7 +1590,7 @@ class Modules(_ProcessedCommand):
         super().__init__("modules", response_class=self.Response, handler=handler)
 
 
-class _StopOnBase(_ProcessedCommand):
+class _StopOnBase(ProcessedCommand):
     """Base class for NoStopOn and StopOn"""
 
     ALL = 0xFFFFFFFF
@@ -1609,7 +1628,7 @@ class NoStopOn(_StopOnBase):
         super().__init__("nostopon", self.Response, events, handler=handler)
 
 
-class Notify(_ProcessedCommand):
+class Notify(ProcessedCommand):
     """Registers connection as a notification channel."""
 
     class Response(_ProcessedResponse):
@@ -1620,7 +1639,7 @@ class Notify(_ProcessedCommand):
         self._dedicate_notification_mode = True
 
 
-class NotifyAt(_ProcessedCommand):
+class NotifyAt(ProcessedCommand):
     """Causes the XBDM to open a new notification connection to the given port."""
 
     class Response(_ProcessedResponse):
@@ -1651,7 +1670,7 @@ class NotifyAt(_ProcessedCommand):
         self.body = bytes(" port=0x%X%s" % (port, flags), "utf-8")
 
 
-class PBSnap(_ProcessedCommand):
+class PBSnap(ProcessedCommand):
     """Takes a D3D snapshot (binary must be compiled as debug or profile)."""
 
     class Response(_ProcessedRawBodyResponse):
@@ -1661,7 +1680,7 @@ class PBSnap(_ProcessedCommand):
         super().__init__("pbsnap", response_class=self.Response, handler=handler)
 
 
-class PerformanceCounterList(_ProcessedCommand):
+class PerformanceCounterList(ProcessedCommand):
     """Returns the list of performance counters and their types."""
 
     class Response(_ProcessedRawBodyResponse):
@@ -1694,7 +1713,7 @@ class PerformanceCounterList(_ProcessedCommand):
         super().__init__("pclist", response_class=self.Response, handler=handler)
 
 
-class PDBInfo(_ProcessedCommand):
+class PDBInfo(ProcessedCommand):
     """Retrieves Program Database information."""
 
     class Response(_ProcessedRawBodyResponse):
@@ -1705,7 +1724,7 @@ class PDBInfo(_ProcessedCommand):
         self.body = bytes(" addr=0x%X" % addr, "utf-8")
 
 
-class PSSnap(_ProcessedCommand):
+class PSSnap(ProcessedCommand):
     """Takes a D3D snapshot (binary must be compiled as debug)."""
 
     class Response(_ProcessedRawBodyResponse):
@@ -1720,7 +1739,7 @@ class PSSnap(_ProcessedCommand):
             self.body += b" marker=0x%X" % marker
 
 
-class QueryPerformanceCounter(_ProcessedCommand):
+class QueryPerformanceCounter(ProcessedCommand):
     """Retrieves performance counter information."""
 
     class Response(_ProcessedRawBodyResponse):
@@ -1736,7 +1755,7 @@ class QueryPerformanceCounter(_ProcessedCommand):
         self.body = bytes(f' name="{name}"{counter_type}', "utf-8")
 
 
-class Reboot(_ProcessedCommand):
+class Reboot(ProcessedCommand):
     """Triggers a reboot."""
 
     FLAG_WAIT = 1
@@ -1763,7 +1782,7 @@ class Reboot(_ProcessedCommand):
             self.body = body
 
 
-class Rename(_ProcessedCommand):
+class Rename(ProcessedCommand):
     """Renames a file or directory."""
 
     class Response(_ProcessedRawBodyResponse):
@@ -1774,7 +1793,7 @@ class Rename(_ProcessedCommand):
         self.body = bytes(' name="%s" newname="%s"' % (name, new_name), "utf-8")
 
 
-class Resume(_ProcessedCommand):
+class Resume(ProcessedCommand):
     """Resumes execution of the given thread."""
 
     class Response(_ProcessedRawBodyResponse):
@@ -1785,7 +1804,7 @@ class Resume(_ProcessedCommand):
         self.body = bytes(f" thread={thread_id}", "utf-8")
 
 
-class Screenshot(_ProcessedCommand):
+class Screenshot(ProcessedCommand):
     """Captures a screenshot from the device."""
 
     class Response(_ProcessedResponse):
@@ -1812,7 +1831,7 @@ class Screenshot(_ProcessedCommand):
         super().__init__("screenshot", response_class=self.Response, handler=handler)
 
 
-class SendFile(_ProcessedCommand):
+class SendFile(ProcessedCommand):
     """Uploads a file to the device."""
 
     class Response(_ProcessedResponse):
@@ -1854,7 +1873,7 @@ class SendFile(_ProcessedCommand):
 #         # There's a second mode that looks like it can take a command string that matches some internal state var
 
 
-class SetConfig(_ProcessedCommand):
+class SetConfig(ProcessedCommand):
     """Sets an NVRAM configuration value."""
 
     class Response(_ProcessedRawBodyResponse):
@@ -1865,7 +1884,7 @@ class SetConfig(_ProcessedCommand):
         self.body = b" index=0x%X value=0x%X" % (index, value)
 
 
-class SetContext(_ProcessedCommand):
+class SetContext(ProcessedCommand):
     """Sets registers in the active thread context."""
 
     class Response(_ProcessedRawBodyResponse):
@@ -1889,7 +1908,7 @@ class SetContext(_ProcessedCommand):
         self.body = bytes(body, "utf-8")
 
 
-class SetFileAttributes(_ProcessedCommand):
+class SetFileAttributes(ProcessedCommand):
     """Sets the attributes of a file."""
 
     class Response(_ProcessedRawBodyResponse):
@@ -1926,7 +1945,7 @@ class SetFileAttributes(_ProcessedCommand):
             )
 
 
-class SetMem(_ProcessedCommand):
+class SetMem(ProcessedCommand):
     """Sets the value of a block of memory."""
 
     class Response(_ProcessedRawBodyResponse):
@@ -1938,7 +1957,7 @@ class SetMem(_ProcessedCommand):
         self.body += binascii.hexlify(data)
 
 
-class SetSystemTime(_ProcessedCommand):
+class SetSystemTime(ProcessedCommand):
     """Sets the system time."""
 
     class Response(_ProcessedRawBodyResponse):
@@ -1954,7 +1973,7 @@ class SetSystemTime(_ProcessedCommand):
             self.body += b" tz=0x%X" % timezone
 
 
-class Stop(_ProcessedCommand):
+class Stop(ProcessedCommand):
     """Stops execution of all threads."""
 
     class Response(_ProcessedRawBodyResponse):
@@ -1974,7 +1993,7 @@ class StopOn(_StopOnBase):
         super().__init__("stopon", self.Response, events, handler=handler)
 
 
-class Suspend(_ProcessedCommand):
+class Suspend(ProcessedCommand):
     """Suspends the given thread."""
 
     class Response(_ProcessedResponse):
@@ -1988,7 +2007,7 @@ class Suspend(_ProcessedCommand):
 # sysfileupd - Looks like this may be invoking a system update?
 
 
-class SystemTime(_ProcessedCommand):
+class SystemTime(ProcessedCommand):
     """Retrieves the system time."""
 
     class Response(_ProcessedResponse):
@@ -2010,7 +2029,7 @@ class SystemTime(_ProcessedCommand):
         super().__init__("systime", response_class=self.Response, handler=handler)
 
 
-class ThreadInfo(_ProcessedCommand):
+class ThreadInfo(ProcessedCommand):
     """Gets information about a specific thread."""
 
     class Response(_ProcessedResponse):
@@ -2066,7 +2085,7 @@ class ThreadInfo(_ProcessedCommand):
         self.body = bytes(f" thread={thread_id}", "utf-8")
 
 
-class Threads(_ProcessedCommand):
+class Threads(ProcessedCommand):
     """Gets the list of active threads."""
 
     class Response(_ProcessedResponse):
@@ -2087,7 +2106,7 @@ class Threads(_ProcessedCommand):
         super().__init__("threads", response_class=self.Response, handler=handler)
 
 
-class LoadOnBootTitle(_ProcessedCommand):
+class LoadOnBootTitle(ProcessedCommand):
     """Sets the path to the XBE that will be loaded when rebooting."""
 
     class Response(_ProcessedRawBodyResponse):
@@ -2117,7 +2136,7 @@ class LoadOnBootTitle(_ProcessedCommand):
         self.body = bytes(body, "utf-8")
 
 
-class LoadOnBootTitleUnpersist(_ProcessedCommand):
+class LoadOnBootTitleUnpersist(ProcessedCommand):
     """Clears the post-reboot title path."""
 
     class Response(_ProcessedRawBodyResponse):
@@ -2128,7 +2147,7 @@ class LoadOnBootTitleUnpersist(_ProcessedCommand):
         self.body = b" nopersist"
 
 
-class UserList(_ProcessedCommand):
+class UserList(ProcessedCommand):
     """Retrieves the registered users (must be locked)."""
 
     class Response(_ProcessedRawBodyResponse):
@@ -2139,7 +2158,7 @@ class UserList(_ProcessedCommand):
         super().__init__("userlist", response_class=self.Response, handler=handler)
 
 
-class VSSnap(_ProcessedCommand):
+class VSSnap(ProcessedCommand):
     """Takes a D3D snapshot (binary must be compiled as debug)."""
 
     class Response(_ProcessedRawBodyResponse):
@@ -2156,7 +2175,7 @@ class VSSnap(_ProcessedCommand):
             self.body += b" marker=0x%X" % marker
 
 
-class WalkMem(_ProcessedCommand):
+class WalkMem(ProcessedCommand):
     """Returns a list of valid virtual memory regions."""
 
     class Response(_ProcessedResponse):
@@ -2203,7 +2222,7 @@ class WalkMem(_ProcessedCommand):
         super().__init__("walkmem", response_class=self.Response, handler=handler)
 
 
-class WriteFile(_ProcessedCommand):
+class WriteFile(ProcessedCommand):
     """Writes data into an existing file."""
 
     class Response(_ProcessedResponse):
@@ -2234,7 +2253,7 @@ class WriteFile(_ProcessedCommand):
         self._binary_payload = content
 
 
-class XBEInfo(_ProcessedCommand):
+class XBEInfo(ProcessedCommand):
     """Retrieves info about an XBE."""
 
     class Response(_ProcessedResponse):
@@ -2271,7 +2290,7 @@ class XBEInfo(_ProcessedCommand):
             self.body = bytes(f' name="{name}"{on_disk_only}', "utf-8")
 
 
-class XTLInfo(_ProcessedCommand):
+class XTLInfo(ProcessedCommand):
     """Retrieves last error info."""
 
     class Response(_ProcessedResponse):

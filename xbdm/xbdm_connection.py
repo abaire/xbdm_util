@@ -110,7 +110,7 @@ class XBDMConnection:
             args=(self,),
         ).start()
 
-    def send_rdcp_command(self, cmd: rdcp_command.RDCPCommand) -> bool:
+    def send_command(self, cmd: rdcp_command.RDCPCommand) -> bool:
         return self._xbdm.send_command(cmd)
 
     def create_notification_listener(

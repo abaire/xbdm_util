@@ -446,7 +446,7 @@ def execute_command(command, command_args, bridge: XBDMConnection) -> int:
 
     cmd = processor(command_args)
     if cmd:
-        bridge.send_rdcp_command(cmd)
+        bridge.send_command(cmd)
 
     return 0
 
@@ -535,7 +535,7 @@ class Shell:
                             )
 
                         if cmd:
-                            self._conn.send_rdcp_command(cmd)
+                            self._conn.send_command(cmd)
 
                         # Hack: Wait for a graceful close and exit.
                         if command == "bye":
@@ -610,7 +610,7 @@ class Shell:
         if len(args) > 1:
             body = bytes(" ".join(args[1:]), "utf-8")
         cmd = rdcp_command.RDCPCommand(args[0], body)
-        self._conn.send_rdcp_command(cmd)
+        self._conn.send_command(cmd)
 
         return self.Result.HANDLED
 
@@ -638,7 +638,7 @@ class Shell:
             print("ERROR: /attach debugger first.")
             return self.Result.HANDLED
 
-        self._debugger_context.break_at_start()
+        self._debugger_context.restart()
         return self.Result.HANDLED
 
     def _cmd_debugger_set_active_thread(self, args: [str]) -> Result:
