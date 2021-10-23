@@ -213,6 +213,14 @@ class Debugger:
 
         return " ".join(items)
 
+    @property
+    def modules(self) -> Dict[str, Module]:
+        return self._module_table
+
+    @property
+    def sections(self) -> Dict[int, Section]:
+        return self._section_table
+
     def shutdown(self):
         if self._debug_port:
             self._connection.destroy_notification_listener(self._debug_port)
@@ -402,7 +410,15 @@ class Debugger:
 
     def _process_create_thread(self, message):
         print(f"CREATE_THREAD: {message}")
-        # thread=12 start=0x00078f2d
+
+        match = re.match(_match_hex("thread"), message)
+        if not match:
+            logger.error(f"FAILED TO MATCH CREATE: {message}")
+
+        thread_id = int(match.group(1), 0)
+        thread = Thread(thread_id, self._connection)
+        self._threads[thread_id] = thread
+        thread.get_info()
 
     def _process_execution_state_change(self, message):
         self._last_xbdm_execution_state = message
