@@ -22,6 +22,15 @@ logger = logging.getLogger(__name__)
 class Thread:
     """Encapsulates information about a thread."""
 
+    class Context:
+        """Contains registers for a Thread."""
+
+        def __init__(self, registers: Dict[str, Optional[int]]):
+            self.registers = registers
+
+    class FullContext(Context):
+        pass
+
     def __init__(self, thread_id: int, connection: XBDMConnection):
         self.thread_id = thread_id
         self._connection = connection
@@ -55,6 +64,7 @@ class Thread:
         self._connection.send_rdcp_command(
             rdcp_command.ThreadInfo(self.thread_id, self._on_thread_info)
         )
+        self._connection.await_empty_queue()
 
     def _on_thread_info(self, response: rdcp_command.ThreadInfo.Response):
         assert response.ok
@@ -67,6 +77,36 @@ class Thread:
         self.limit = response.limit
         # TODO: Convert to a unix timestmap for ease of display.
         self.create_time = response.create
+
+    def get_context(self) -> Optional[Context]:
+        ret = []
+
+        def _handler(response: rdcp_command.GetContext):
+            ret.append(response)
+
+        self._connection.send_rdcp_command(
+            rdcp_command.GetContext(
+                self.thread_id, enable_full=True, enable_fp=True, handler=_handler
+            )
+        )
+        self._connection.await_empty_queue()
+        if not ret:
+            return None
+        return self.Context(ret[0].registers)
+
+    def get_full_context(self) -> Optional[FullContext]:
+        ret = []
+
+        def _handler(response: rdcp_command.GetContext):
+            ret.append(response)
+
+        self._connection.send_rdcp_command(
+            rdcp_command.GetContext(
+                self.thread_id, enable_full=True, enable_fp=True, handler=_handler
+            )
+        )
+        self._connection.await_empty_queue()
+        return None
 
 
 def _match_hex(key: str) -> str:
@@ -203,6 +243,10 @@ class Debugger:
         return self._threads.values()
 
     @property
+    def active_thread(self) -> Optional[Thread]:
+        return self._threads.get(self._active_thread_id)
+
+    @property
     def short_state_info(self) -> str:
         """Returns a short string indicating the current execution state."""
         items = []
@@ -241,9 +285,7 @@ class Debugger:
             rdcp_command.NotifyAt(self._debug_port, debug_flag=True)
         )
         self._connection.send_rdcp_command(rdcp_command.Debugger())
-        self._connection.await_empty_queue()
-
-        self._refresh_thread_info_async()
+        self.refresh_thread_info()
 
     def debug_xbe(
         self, path: str, command_line: Optional[str] = None, persist: bool = False
@@ -290,11 +332,42 @@ class Debugger:
         return True
 
     def refresh_thread_info(self):
-        self._refresh_thread_info_async()
+        new_thread_ids = set()
+
+        def _on_threads(response: rdcp_command.Threads.Response):
+            assert response.ok
+            new_thread_ids.update(response.thread_ids)
+
+        self._connection.send_rdcp_command(rdcp_command.Threads(_on_threads))
         self._connection.await_empty_queue()
 
-    def _refresh_thread_info_async(self):
-        self._connection.send_rdcp_command(rdcp_command.Threads(self._on_threads))
+        known_threads = set(self._threads.keys())
+
+        to_remove = known_threads - new_thread_ids
+        for thread_id in to_remove:
+            del self._threads[thread_id]
+
+        to_add = new_thread_ids - known_threads
+        for thread_id in to_add:
+            self._threads[thread_id] = Thread(thread_id, self._connection)
+
+        to_update = new_thread_ids.intersection(known_threads)
+        for thread_id in to_update:
+            self._threads[thread_id].get_info()
+
+    def get_thread_context(self) -> Optional[Thread.Context]:
+        thread = self.active_thread
+        if not thread:
+            return None
+
+        return thread.get_context()
+
+    def get_full_thread_context(self) -> Optional[Thread.FullContext]:
+        thread = self.active_thread
+        if not thread:
+            return None
+
+        return thread.get_full_context()
 
     def _restart_and_attach(self):
         self._connection.send_rdcp_command(
@@ -461,21 +534,3 @@ class Debugger:
 
         thread.last_known_address = address
         self._active_thread_id = thread_id
-
-    def _on_threads(self, response: rdcp_command.Threads.Response):
-        assert response.ok
-
-        thread_ids = set(response.thread_ids)
-        known_threads = set(self._threads.keys())
-
-        to_remove = known_threads - thread_ids
-        for thread_id in to_remove:
-            del self._threads[thread_id]
-
-        to_add = thread_ids - known_threads
-        for thread_id in to_add:
-            self._threads[thread_id] = Thread(thread_id, self._connection)
-
-        to_update = thread_ids.intersection(known_threads)
-        for thread_id in to_update:
-            self._threads[thread_id].get_info()

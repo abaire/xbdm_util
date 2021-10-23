@@ -181,6 +181,7 @@ class XBDMConnection:
         self._close()
 
     def await_empty_queue(self) -> None:
+        assert threading.current_thread() != self._thread
         # TODO: Use condition variables instead of spinning.
         while self._xbdm.has_buffered_data:
             time.sleep(0.05)

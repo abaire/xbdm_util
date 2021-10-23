@@ -1,15 +1,16 @@
 import binascii
 import enum
 import logging
-
 import sys
 import textwrap
+from typing import List
 from typing import Optional
 
 import natsort
 
 from xbdm import rdcp_command
 from xbdm.debugger import Debugger
+from xbdm.debugger import Thread
 from xbdm.xbdm_connection import XBDMConnection
 
 logger = logging.getLogger(__name__)
@@ -487,6 +488,14 @@ class Shell:
                 "Step one function call in the current thread.",
                 self._cmd_debugger_step,
             ),
+            "/context": (
+                "Print basic active thread context.",
+                self._cmd_debugger_getcontext,
+            ),
+            "/fullcontext": (
+                "Print full active thread context.",
+                self._cmd_debugger_getfullcontext,
+            ),
         }
 
     def run(self):
@@ -656,9 +665,55 @@ class Shell:
 
         self._debugger_context.refresh_thread_info()
 
-        thread_info = sorted(self._debugger_context.threads, key=lambda x: x.thread_id)
+        thread_info: List[Thread] = sorted(
+            self._debugger_context.threads, key=lambda x: x.thread_id
+        )
         for thread in thread_info:
             print(thread)
+
+        return self.Result.HANDLED
+
+    def _cmd_debugger_getcontext(self, _args: [str]) -> Result:
+        if not self._debugger_context:
+            print("ERROR: /attach debugger first.")
+            return self.Result.HANDLED
+
+        info: Optional[Thread.Context] = self._debugger_context.get_thread_context()
+        if not info:
+            print("/switch to a valid thread and stop first.")
+
+        ordered_registers = [
+            "Eip",
+            "Ebp",
+            "Esp",
+            "EFlags",
+            "Eax",
+            "Ebx",
+            "Ecx",
+            "Edx",
+            "Edi",
+            "Esi",
+            "Cr0NpxState",
+        ]
+
+        print(f"Registers for thread {self._debugger_context.active_thread.thread_id}:")
+        for reg in ordered_registers:
+            value = info.registers.get(reg, None)
+            if value is None:
+                value = "???"
+            else:
+                value = "0x%08X" % value
+            print("  %-11s: %s" % (reg, value))
+
+        return self.Result.HANDLED
+
+    def _cmd_debugger_getfullcontext(self, _args: [str]) -> Result:
+        if not self._debugger_context:
+            print("ERROR: /attach debugger first.")
+            return self.Result.HANDLED
+
+        info: Thread.FullContext = self._debugger_context.get_full_thread_context()
+        print(info)
 
         return self.Result.HANDLED
 

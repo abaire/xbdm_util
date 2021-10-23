@@ -4,6 +4,7 @@ import enum
 import ipaddress
 import logging
 from typing import Callable
+from typing import Dict
 from typing import Mapping
 from typing import Optional
 
@@ -710,11 +711,44 @@ class FuncCall(_ProcessedCommand):
 
 
 class GetContext(_ProcessedCommand):
-    """Gets the active thread context."""
+    """Gets the register context for the given thread."""
 
-    class Response(_ProcessedRawBodyResponse):
-        # Response should be multiline but is always empty.
-        pass
+    class Response(_ProcessedResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            self.registers: Dict[str, Optional[int]] = {
+                "Ebp": None,
+                "Esp": None,
+                "Eip": None,
+                "EFlags": None,
+                "Eax": None,
+                "Ebx": None,
+                "Ecx": None,
+                "Edx": None,
+                "Edi": None,
+                "Esi": None,
+                "Cr0NpxState": None,
+            }
+
+            if not self.ok:
+                return
+
+            entries = response.parse_data_map()
+            for key, value in entries.items():
+                key = key.decode("utf-8")
+                if key not in self.registers:
+                    logger.error(f"UNKNOWN REGISTER {key}")
+
+                self.registers[key] = int(value.decode("utf-8"), 0)
+
+        @property
+        def ok(self):
+            return self.status == rdcp_response.RDCPResponse.STATUS_MULTILINE_RESPONSE
+
+        @property
+        def _body_str(self) -> str:
+            return ", ".join(self.registers.items())
 
     def __init__(
         self,
@@ -805,7 +839,9 @@ class GetExtContext(_ProcessedCommand):
         super().__init__("getextcontext", response_class=self.Response, handler=handler)
         thread_id_str = "%d" % thread_id
         self.body = bytes(f" thread={thread_id_str}", "utf-8")
-        self._binary_response_length = 516
+        self._binary_response_length = (
+            rdcp_response.RDCPResponse.BINARY_FIRST_DWORD_HAS_SIZE
+        )
 
 
 class GetFile(_ProcessedCommand):
