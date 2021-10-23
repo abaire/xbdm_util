@@ -10,6 +10,7 @@ import time
 from xbdm import rdcp_command
 from xbdm.xbdm_connection import XBDMConnection
 
+from typing import Callable
 from typing import Dict
 from typing import Iterable
 from typing import List
@@ -73,15 +74,31 @@ class Debugger:
         self._connection = connection
         self._debug_port = None
 
+        self._notification_handler_map = self._build_notification_handler_map()
+
         self._threads: Dict[int, Thread] = {}
         self._notification_channel_connected = False
         self._hello_received = False
 
         self._active_thread_id: Optional[int] = None
+        self._last_xbdm_execution_state: Optional[str] = None
 
     @property
     def threads(self) -> Iterable[Thread]:
         return self._threads.values()
+
+    @property
+    def short_state_info(self) -> str:
+        """Returns a short string indicating the current execution state."""
+        items = []
+
+        if self._last_xbdm_execution_state:
+            items.append(self._last_xbdm_execution_state)
+
+        if self._active_thread_id is not None:
+            items.append("TID[%d]" % self._active_thread_id)
+
+        return " ".join(items)
 
     def shutdown(self):
         if self._debug_port:
@@ -205,6 +222,17 @@ class Debugger:
         self._connection.send_rdcp_command(rdcp_command.BreakAtStart())
         self._connection.send_rdcp_command(rdcp_command.Go())
 
+    def _build_notification_handler_map(self) -> Dict[str, Callable[[str], None]]:
+        return {
+            "vx!": self._process_vx,
+            "debugstr ": self._process_debugstr,
+            "modload ": self._process_modload,
+            "sectload ": self._process_sectload,
+            "create ": self._process_create_thread,
+            "execution ": self._process_execution_state_change,
+            "break ": self._process_break,
+        }
+
     def _on_notification(self, message: str):
         logger.debug(f"DEBUGGER NOTIFICATION: '{message}'")
         self._notification_channel_connected = True
@@ -213,6 +241,44 @@ class Debugger:
             # Sent when XBDM reconnects after a reboot event.
             self._hello_received = True
             return
+
+        for key, handler in self._notification_handler_map.items():
+            if message.startswith(key):
+                handler(message[len(key) :])
+                return
+
+    def _process_vx(self, message):
+        print(f"VX: {message}")
+        # 'event <Event Id="Xbe" Time="0x01d7c7c10fe720e0" Severity="1" TCR="" Description="\Device\Harddisk0\Partition2\xshell.xbe"/>'
+        # 'event <Event Id="Xtl" Time="0x01d7c7c10fe7e430" Severity="1" TCR="" Description="XTL imports resolved"/>'
+
+    def _process_debugstr(self, message):
+        print(f"DBGSTR: {message}")
+        # 'thread=4 lf string=VX: INFO \Device\Harddisk0\Partition2\xshell.xbe'
+
+    def _process_modload(self, message):
+        print(f"MODLOAD: {message}")
+        # 'name="XShell_new.exe" base=0x00010bc0 size=0x001c5880 check=0x00000000 timestamp=0x00000000 tls xbe'
+
+    def _process_sectload(self, message):
+        print(f"SECTLOAD: {message}")
+        # 'name="XONLINE" base=0x00011000 size=0x00054eec index=0 flags=1'
+
+    def _process_create_thread(self, message):
+        print(f"CREATE_THREAD: {message}")
+        # thread=12 start=0x00078f2d
+
+    def _process_execution_state_change(self, message):
+        print(f"EXECUTION STATE CHANGE: {message}")
+        self._last_xbdm_execution_state = message
+        # rebooting
+        # pending
+        # started
+        # stopped
+
+    def _process_break(self, message):
+        print(f"BREAK: {message}")
+        # 'addr=0xb001a2cb thread=12 stop'
 
     def _on_threads(self, response: rdcp_command.Threads.Response):
         assert response.ok

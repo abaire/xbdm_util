@@ -563,7 +563,7 @@ class Shell:
 
     def _print_prompt(self) -> None:
         if self._debugger_context:
-            print("dbg> ", end="")
+            print(f"dbg {self._debugger_context.short_state_info}> ", end="")
         else:
             print("> ", end="")
         sys.stdout.flush()
