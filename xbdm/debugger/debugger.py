@@ -36,6 +36,8 @@ class Thread:
 
         self.get_info()
 
+        self.last_known_address: Optional[int] = None
+
     def __str__(self) -> str:
         lines = [
             f"Thread: {self.thread_id}",
@@ -235,7 +237,9 @@ class Debugger:
             )
             self._debug_port = listener_addr[1]
 
-        self._connection.send_rdcp_command(rdcp_command.NotifyAt(self._debug_port))
+        self._connection.send_rdcp_command(
+            rdcp_command.NotifyAt(self._debug_port, debug_flag=True)
+        )
         self._connection.send_rdcp_command(rdcp_command.Debugger())
         self._connection.await_empty_queue()
 
@@ -414,6 +418,7 @@ class Debugger:
         match = re.match(_match_hex("thread"), message)
         if not match:
             logger.error(f"FAILED TO MATCH CREATE: {message}")
+            return
 
         thread_id = int(match.group(1), 0)
         thread = Thread(thread_id, self._connection)
@@ -435,9 +440,27 @@ class Debugger:
         # started
         # stopped
 
+    _BREAK_RE = re.compile(
+        r"\s+".join([_match_hex(x) for x in ["addr", "thread"]]) + "\s+(.+)"
+    )
+
     def _process_break(self, message):
-        print(f"BREAK: {message}")
-        # 'addr=0xb001a2cb thread=12 stop'
+        match = self._BREAK_RE.match(message)
+        if not match:
+            logger.error(f"FAILED TO MATCH BREAK: {message}")
+            return
+
+        address = int(match.group(1), 0)
+        thread_id = int(match.group(2), 0)
+
+        thread = self._threads.get(thread_id)
+        if not thread:
+            thread = Thread(thread_id, self._connection)
+            self._threads[thread_id] = thread
+            thread.get_info()
+
+        thread.last_known_address = address
+        self._active_thread_id = thread_id
 
     def _on_threads(self, response: rdcp_command.Threads.Response):
         assert response.ok
