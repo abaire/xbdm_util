@@ -413,12 +413,11 @@ class Continue(ProcessedCommand):
     class Response(_ProcessedResponse):
         pass
 
-    def __init__(self, thread_id, exception: bool = False, handler=None):
+    def __init__(self, thread_id: int, exception: bool = False, handler=None):
         # TODO: Document 'exception' flag behavior.
         super().__init__("continue", response_class=self.Response, handler=handler)
-        thread_id_string = "0x%X" % thread_id
         exception_string = " exception" if exception else ""
-        self.body = bytes(f" thread={thread_id_string}{exception_string}", "utf-8")
+        self.body = bytes(f" thread={thread_id}{exception_string}", "utf-8")
 
 
 # class Crashdump(_ProcessedCommand):
@@ -724,7 +723,7 @@ class FuncCall(ProcessedCommand):
     class Response(_ProcessedRawBodyResponse):
         pass
 
-    def __init__(self, thread_id, handler=None):
+    def __init__(self, thread_id: int, handler=None):
         super().__init__("funccall", response_class=self.Response, handler=handler)
         self.body = bytes(f" thread={thread_id}", "utf-8")
 
@@ -771,15 +770,14 @@ class GetContext(ProcessedCommand):
 
     def __init__(
         self,
-        thread_id,
-        enable_control=False,
-        enable_interrupt=False,
-        enable_full=False,
-        enable_fp=False,
+        thread_id: int,
+        enable_control: bool = False,
+        enable_interrupt: bool = False,
+        enable_full: bool = False,
+        enable_fp: bool = False,
         handler=None,
     ):
         super().__init__("getcontext", response_class=self.Response, handler=handler)
-        thread_id_str = "%d" % thread_id
         flags = []
         if enable_control:
             flags.append("control")
@@ -793,7 +791,7 @@ class GetContext(ProcessedCommand):
             flags = ""
         else:
             flags = " " + " ".join(flags)
-        self.body = bytes(f" thread={thread_id_str}{flags}", "utf-8")
+        self.body = bytes(f" thread={thread_id}{flags}", "utf-8")
 
 
 class GetD3DState(ProcessedCommand):
@@ -854,10 +852,9 @@ class GetExtContext(ProcessedCommand):
         def _body_str(self) -> str:
             return f"{self.printable_data}"
 
-    def __init__(self, thread_id, handler=None):
+    def __init__(self, thread_id: int, handler=None):
         super().__init__("getextcontext", response_class=self.Response, handler=handler)
-        thread_id_str = "%d" % thread_id
-        self.body = bytes(f" thread={thread_id_str}", "utf-8")
+        self.body = bytes(f" thread={thread_id}", "utf-8")
         self._binary_response_length = (
             rdcp_response.RDCPResponse.BINARY_FIRST_DWORD_HAS_SIZE
         )
@@ -1219,7 +1216,7 @@ class Halt(ProcessedCommand):
     class Response(_ProcessedRawBodyResponse):
         pass
 
-    def __init__(self, thread_id, handler=None):
+    def __init__(self, thread_id: int, handler=None):
         super().__init__("halt", response_class=self.Response, handler=handler)
         self.body = bytes(f" thread={thread_id}", "utf-8")
 
@@ -1284,7 +1281,7 @@ class IsStopped(ProcessedCommand):
         # TODO: Process the reason for the stoppage.
         pass
 
-    def __init__(self, thread_id, handler=None):
+    def __init__(self, thread_id: int, handler=None):
         super().__init__("isstopped", response_class=self.Response, handler=handler)
         self.body = bytes(f" thread={thread_id}", "utf-8")
 
@@ -1799,7 +1796,7 @@ class Resume(ProcessedCommand):
     class Response(_ProcessedRawBodyResponse):
         pass
 
-    def __init__(self, thread_id, handler=None):
+    def __init__(self, thread_id: int, handler=None):
         super().__init__("resume", response_class=self.Response, handler=handler)
         self.body = bytes(f" thread={thread_id}", "utf-8")
 
@@ -1999,7 +1996,7 @@ class Suspend(ProcessedCommand):
     class Response(_ProcessedResponse):
         pass
 
-    def __init__(self, thread_id, handler=None):
+    def __init__(self, thread_id: int, handler=None):
         super().__init__("suspend", response_class=self.Response, handler=handler)
         self.body = bytes(f" thread={thread_id}", "utf-8")
 
@@ -2080,7 +2077,7 @@ class ThreadInfo(ProcessedCommand):
         def _body_str(self) -> str:
             return f" suspend={self.suspend} priority={self.priority} tlsbase={self.tlsbase} start={self.start} base={self.base} limit={self.limit} create={self.create}"
 
-    def __init__(self, thread_id, handler=None):
+    def __init__(self, thread_id: int, handler=None):
         super().__init__("threadinfo", response_class=self.Response, handler=handler)
         self.body = bytes(f" thread={thread_id}", "utf-8")
 

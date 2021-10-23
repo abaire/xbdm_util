@@ -135,8 +135,16 @@ class Thread(_XBDMClient):
         )
         return response.ok
 
+    def halt(self) -> bool:
+        """Sends a 'halt' command."""
+        response = self._call(rdcp_command.Halt(self.thread_id))
+        if not response.ok:
+            return False
+        self.get_info()
+        return True
+
     def continue_once(self, break_on_exceptions: bool = True) -> bool:
-        """Sends a 'continue' command"""
+        """Sends a 'continue' command."""
         response = self._call(
             rdcp_command.Continue(self.thread_id, exception=break_on_exceptions)
         )
@@ -145,19 +153,27 @@ class Thread(_XBDMClient):
         self.get_info()
         return True
 
-    def halt(self) -> bool:
-        """Sends a 'halt' command"""
-        response = self._call(rdcp_command.Halt(self.thread_id))
+    def suspend(self) -> bool:
+        """Sends a 'suspend' command."""
+        response = self._call(rdcp_command.Suspend(self.thread_id))
         if not response.ok:
             return False
         self.get_info()
         return True
 
-    def unsuspend(self):
-        """Sends continue commands until suspend count is 0."""
+    def resume(self) -> bool:
+        """Sends a 'resume' command."""
+        response = self._call(rdcp_command.Resume(self.thread_id))
+        if not response.ok:
+            return False
         self.get_info()
-        while self.suspend_count > 0:
-            self._connection.send_command(rdcp_command.Continue(self.thread_id))
+        return True
+
+    # def unsuspend(self):
+    #     """Sends continue commands until suspend count is 0."""
+    #     self.get_info()
+    #     while self.suspend_count > 0:
+    #         self._connection.send_command(rdcp_command.Continue(self.thread_id))
 
 
 def _match_hex(key: str) -> str:
