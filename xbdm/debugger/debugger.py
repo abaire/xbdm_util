@@ -1,11 +1,14 @@
 """Provides higher level functions for step-debugging functionality."""
 from __future__ import annotations
 
+import binascii
 import collections
 import logging
 import os
 import re
 import threading
+
+import struct
 import time
 
 from xbdm import rdcp_command
@@ -18,6 +21,41 @@ from typing import List
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_ext_registers(info: bytes) -> Dict[str, int]:
+    (
+        control,
+        status,
+        tag,
+        error_offset,
+        error_selector,
+        data_offset,
+        data_selector,
+    ) = struct.unpack_from("IIIIIII", info, 0)
+    offset = 7 * 4
+    registers = info[offset : offset + 80]
+
+    offset += 80
+    cr0NpxState = struct.unpack_from("I", info, offset)[0]
+
+    ext_info = {
+        "control": control,
+        "status": status,
+        "tag": tag,
+        "error_offset": error_offset,
+        "error_selector": error_selector,
+        "data_offset": data_offset,
+        "data_selector": data_selector,
+        "Cr0NpxState": cr0NpxState,
+    }
+
+    # Unpack ST0 - ST7
+    for i in range(8):
+        low_dword, high_word = struct.unpack_from("IH", registers, i * 10)
+        ext_info["ST%d" % i] = low_dword + (high_word << 8)
+
+    return ext_info
 
 
 class _XBDMClient:
@@ -54,7 +92,18 @@ class Thread(_XBDMClient):
             self.registers = registers
 
     class FullContext(Context):
-        pass
+        """Contains registers and extended registers for a Thread."""
+
+        def __init__(
+            self,
+            registers: Dict[str, Optional[int]],
+            ext_registers: Optional[bytes] = None,
+        ):
+            super().__init__(registers)
+
+            self.ext_register_data = None
+            if ext_registers:
+                self.ext_register_data = _parse_ext_registers(ext_registers)
 
     _TRAP_FLAG = 0x100
 
@@ -117,8 +166,14 @@ class Thread(_XBDMClient):
         )
         if not response.ok:
             return None
-        print("TODO: FINISHME")  # TODO: FINISHME
-        return None
+
+        basic_registers = response.registers
+        ext_registers = None
+        response = self._call(rdcp_command.GetExtContext(self.thread_id))
+        if response.ok:
+            ext_registers = response.data
+
+        return self.FullContext(basic_registers, ext_registers)
 
     def set_step_instruction_mode(self, enabled: bool) -> bool:
         context = self.get_context()
