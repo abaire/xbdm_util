@@ -8,6 +8,7 @@ from typing import Tuple
 
 from xbdm import connection_manager
 from util import shell
+from util import commands
 
 XBDM_PORT = 731
 logger = logging.getLogger(__name__)
@@ -77,7 +78,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "command",
-        choices=sorted(shell.DISPATCH_TABLE.keys()),
+        choices=sorted(commands.DISPATCH_TABLE.keys()),
         help="The command to invoke.",
     )
 
