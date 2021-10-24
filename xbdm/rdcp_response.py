@@ -2,6 +2,7 @@
 import logging
 import struct
 import sys
+from typing import Dict
 from typing import Optional
 from typing import Tuple
 
@@ -65,9 +66,9 @@ def get_utf_property(property_map: {bytes: bytes}, key: bytes, default=None) -> 
     return ret
 
 
-def get_int_property(property_map: {bytes: bytes}, key: bytes, default=0) -> int:
+def get_int_property(property_map: Dict[bytes, bytes], key: bytes, default=0) -> int:
     """Returns the value of the given key as an integer."""
-    return int(get_utf_property(property_map, key, bytes(f"{default}", "utf-8")), 16)
+    return int(get_utf_property(property_map, key, bytes(f"{default}", "utf-8")), 0)
 
 
 def get_qword_property(

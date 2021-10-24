@@ -397,6 +397,26 @@ class Debugger(_XBDMClient):
     def set_active_thread(self, thread_id: Optional[int]):
         self._active_thread_id = thread_id
 
+    def step_instruction(self) -> bool:
+        thread = self.active_thread
+        if not thread:
+            print("No active thread context")
+            return False
+
+        if not thread.set_step_instruction_mode(True):
+            print("Failed to set trap flag.")
+            return False
+
+        if not thread.continue_once():
+            print("Failed to continue.")
+            return False
+
+        if not thread.set_step_instruction_mode(False):
+            print("Failed to clear trap flag.")
+            return False
+
+        return True
+
     def step_function(self) -> bool:
         if self._active_thread_id is None:
             print("No active thread context")
@@ -438,6 +458,17 @@ class Debugger(_XBDMClient):
             return None
 
         return thread.get_full_context()
+
+    def halt(self) -> bool:
+        """Halts all running threads."""
+        response = self._call(rdcp_command.Halt())
+        return response.ok
+
+    def continue_all(self, break_on_exceptions: bool = True):
+        """Continues all threads."""
+        for thread in self._threads.values():
+            thread.continue_once(break_on_exceptions)
+        return True
 
     def _restart_and_attach(self):
         response = self._call(

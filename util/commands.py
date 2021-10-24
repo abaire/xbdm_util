@@ -255,6 +255,17 @@ def _get_mem(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
     return rdcp_command.GetMem(address, int(args[1], 0), handler=print)
 
 
+def _halt(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
+    """[thread_id]
+
+    Halts the given thread, or all threads if no `thread_id` is given.
+    """
+
+    if args:
+        return rdcp_command.Halt(int(args[0], 0), handler=print)
+    rdcp_command.Halt(handler=print)
+
+
 def _kernel_debug(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
     """[mode]
 
@@ -507,7 +518,7 @@ DISPATCH_TABLE = {
     "getutilitydriveinfo": lambda _: rdcp_command.GetUtilityDriveInfo(handler=print),
     "go": lambda _: rdcp_command.Go(handler=print),
     # GPUCounter
-    "halt": lambda args: rdcp_command.Halt(int(args[0], 0), handler=print),
+    "halt": _halt,
     "isbreak": lambda args: rdcp_command.IsBreak(int(args[0], 0), handler=print),
     "isdebugger": lambda _: rdcp_command.IsDebugger(handler=print),
     "isstopped": lambda args: rdcp_command.IsStopped(int(args[0], 0), handler=print),

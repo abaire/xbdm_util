@@ -1215,14 +1215,15 @@ class GPUCounter(ProcessedCommand):
 
 
 class Halt(ProcessedCommand):
-    """Halts execution of the given thread."""
+    """Halts execution of the given thread or all threads."""
 
     class Response(_ProcessedRawBodyResponse):
         pass
 
-    def __init__(self, thread_id: int, handler=None):
+    def __init__(self, thread_id: Optional[int] = None, handler=None):
         super().__init__("halt", response_class=self.Response, handler=handler)
-        self.body = bytes(f" thread={thread_id}", "utf-8")
+        if thread_id is not None:
+            self.body = bytes(f" thread={thread_id}", "utf-8")
 
 
 class IsBreak(ProcessedCommand):
@@ -1305,6 +1306,269 @@ class IsStopped(ProcessedCommand):
     """Checks to see if the given thread is stopped."""
 
     class Response(_ProcessedResponse):
+        class StopReason:
+            def __init__(
+                self, reason: str, info_items: Optional[Dict[str, str]] = None
+            ):
+                self.reason = reason
+                self.info_items = info_items
+
+            def __str__(self):
+                ret = f"{self.__class__.__name__}: {self.reason}"
+                if self.info_items:
+                    ret += "> "
+                    for key, value in self.info_items.items():
+                        ret += f" {key}: {value}"
+                return ret
+
+        class Unknown(StopReason):
+            def __init__(self):
+                super().__init__("unknown reason")
+
+        class Debugstr(StopReason):
+            def __init__(self, entries: Dict[bytes, bytes]):
+                self.thread_id = rdcp_response.get_int_property(entries, b"thread")
+                super().__init__("debugstr", {"thread": "%d" % self.thread_id})
+
+        class Assertion(StopReason):
+            def __init__(self, entries: Dict[bytes, bytes]):
+                self.thread_id = rdcp_response.get_int_property(entries, b"thread")
+                super().__init__("assert prompt", {"thread": "%d" % self.thread_id})
+
+        class Breakpoint(StopReason):
+            def __init__(self, entries: Dict[bytes, bytes]):
+                self.thread_id: int = rdcp_response.get_int_property(entries, b"thread")
+                self.address: int = rdcp_response.get_int_property(entries, b"addr")
+                super().__init__(
+                    "breakpoint",
+                    {
+                        "thread": "%d" % self.thread_id,
+                        "address": "0x%08X" % self.address,
+                    },
+                )
+
+        class SingleStep(StopReason):
+            def __init__(self, entries: Dict[bytes, bytes]):
+                self.thread_id: int = rdcp_response.get_int_property(entries, b"thread")
+                self.address: int = rdcp_response.get_int_property(entries, b"addr")
+                super().__init__(
+                    "single step",
+                    {
+                        "thread": "%d" % self.thread_id,
+                        "address": "0x%08X" % self.address,
+                    },
+                )
+
+        class DataBreakpoint(StopReason):
+            ACCESS_INVALID = -1
+            ACCESS_READ = 0
+            ACCESS_WRITE = 1
+            ACCESS_EXECUTE = 2
+
+            def __init__(self, entries: Dict[bytes, bytes]):
+                self.thread_id: int = rdcp_response.get_int_property(entries, b"thread")
+                self.address: int = rdcp_response.get_int_property(entries, b"addr")
+                self.break_type: int = self.ACCESS_INVALID
+                self.access_address: int = 0
+
+                reason_name = ""
+                for index, key in enumerate([b"read", b"write", b"execute"]):
+                    addr = rdcp_response.get_int_property(entries, key, -1)
+                    if addr == -1:
+                        continue
+
+                    self.break_type = index
+                    reason_name = key.decode("utf-8")
+                    self.access_address = addr
+                    break
+
+                super().__init__(
+                    "data breakpoint",
+                    {
+                        "thread": "%d" % self.thread_id,
+                        "address": "0x%08X" % self.address,
+                        "access": "%s@0x%08X" % (reason_name, self.access_address),
+                    },
+                )
+
+        class ExecutionStateChange(StopReason):
+            STATE_INVALID = -1
+            STATE_STOPPED = 0
+            STATE_STARTED = 1
+            STATE_REBOOTING = 2
+            STATE_PENDING = 3
+
+            def __init__(self, info: str):
+                self.state_string = info
+                states = ["stopped", "started", "rebooting", "pending"]
+                self.state = states.index(info)
+                super().__init__(
+                    "execution state changed", {"new_state": self.state_string}
+                )
+
+        class Exception(StopReason):
+            FLAG_NONE = 0
+            FLAG_FIRST_CHANCE = 1
+            FLAG_NON_CONTINUABLE = 2
+            FLAG_ACCESS_VIOLATION_READ = 3
+            FLAG_ACCESS_VIOLATION_WRITE = 4
+
+            def __init__(self, entries: Dict[bytes, bytes]):
+
+                self.code: int = rdcp_response.get_int_property(entries, b"code")
+                self.thread: int = rdcp_response.get_int_property(entries, b"thread")
+                self.address: int = rdcp_response.get_int_property(entries, b"address")
+
+                attributes: Dict[str, str] = {
+                    "code": "0x%08X" % self.code,
+                    "thread": "%d" % self.thread,
+                    "address": "0x%08X" % self.address,
+                }
+
+                self.is_first_chance_exception: bool = rdcp_response.get_bool_property(
+                    entries, b"first"
+                )
+                if self.is_first_chance_exception:
+                    attributes["first_chance_exception"] = "true"
+
+                self.is_non_continuable: bool = rdcp_response.get_bool_property(
+                    entries, b"noncont"
+                )
+                if self.is_non_continuable:
+                    attributes["non_continuable"] = "true"
+
+                self.access_violation_address: Optional[int] = None
+                self.is_access_violation_read: bool = False
+                self.is_access_violation_write: bool = False
+
+                access_violation_addr = rdcp_response.get_int_property(
+                    entries, b"read", -1
+                )
+                if access_violation_addr != -1:
+                    self.is_access_violation_read: bool = True
+                    self.access_violation_address = access_violation_addr
+                    attributes["access_violation_type"] = "read"
+                    attributes["access_violation_address"] = (
+                        "0x%08X" % self.access_violation_address
+                    )
+
+                else:
+                    access_violation_addr = rdcp_response.get_int_property(
+                        entries, b"write", -1
+                    )
+                    if access_violation_addr != -1:
+                        self.is_access_violation_write: bool = True
+                        self.access_violation_address = access_violation_addr
+                        attributes["access_violation_type"] = "write"
+                        attributes["access_violation_address"] = (
+                            "0x%08X" % self.access_violation_address
+                        )
+
+                self.num_param: Optional[int] = None
+                self.params: Optional[int] = None
+                if not (
+                    self.is_access_violation_read or self.is_access_violation_write
+                ):
+                    self.num_param = rdcp_response.get_int_property(entries, b"nparams")
+                    self.params = rdcp_response.get_int_property(entries, b"params")
+                    attributes["nparam"] = "%d" % self.num_param
+                    attributes["params"] = "0x%08X" % self.params
+
+                super().__init__("exception", attributes)
+
+        class CreateThread(StopReason):
+            def __init__(self, entries: Dict[bytes, bytes]):
+                self.thread_id: int = rdcp_response.get_int_property(entries, b"thread")
+                self.start: int = rdcp_response.get_int_property(entries, b"start")
+                super().__init__(
+                    "create thread",
+                    {
+                        "thread": "%d" % self.thread_id,
+                        "start_address": "0x%08X" % self.start,
+                    },
+                )
+
+        class TerminateThread(StopReason):
+            def __init__(self, entries: Dict[bytes, bytes]):
+                self.thread_id: int = rdcp_response.get_int_property(entries, b"thread")
+                super().__init__("terminate thread", {"thread": "%d" % self.thread_id})
+
+        class ModuleLoad(StopReason):
+            def __init__(self, entries: Dict[bytes, bytes]):
+                self.name: str = rdcp_response.get_utf_property(entries, b"name")
+                self.base_address: int = rdcp_response.get_int_property(
+                    entries, b"base"
+                )
+                self.size: int = rdcp_response.get_int_property(entries, b"size")
+                self.checksum: int = rdcp_response.get_int_property(entries, b"check")
+                self.timestamp: int = rdcp_response.get_int_property(
+                    entries, b"timestamp"
+                )
+                self.tls: bool = rdcp_response.get_bool_property(entries, b"tls")
+                self.xbe: bool = rdcp_response.get_bool_property(entries, b"xbe")
+
+                attributes = {
+                    "name": self.name,
+                    "size": "%d" % self.size,
+                    "base_address": "0x%08x" % self.base_address,
+                    "checksum": "0x%08x" % self.checksum,
+                    "timestamp": "0x%08x" % self.timestamp,
+                }
+                if self.tls:
+                    attributes["has_thread_local_storage"] = "true"
+                if self.xbe:
+                    attributes["is_xbe"] = "true"
+
+                super().__init__("module load", attributes)
+
+        class _SectionAction(StopReason):
+            def __init__(self, action: str, entries: Dict[bytes, bytes]):
+                self.name: str = rdcp_response.get_utf_property(entries, b"name")
+                self.base_address: int = rdcp_response.get_int_property(
+                    entries, b"base"
+                )
+                self.size: int = rdcp_response.get_int_property(entries, b"size")
+                self.index: int = rdcp_response.get_int_property(entries, b"index")
+                self.flags: int = rdcp_response.get_int_property(entries, b"flags")
+
+                attributes = {
+                    "name": self.name,
+                    "size": "%d" % self.size,
+                    "base_address": "0x%08x" % self.base_address,
+                    "index": "%d" % self.index,
+                    "flags": "%d" % self.flags,
+                }
+                super().__init__(action, attributes)
+
+        class SectionLoad(_SectionAction):
+            def __init__(self, entries: Dict[bytes, bytes]):
+                super().__init__("load module", entries)
+
+        class SectionUnload(_SectionAction):
+            def __init__(self, entries: Dict[bytes, bytes]):
+                super().__init__("unload module", entries)
+
+        class _RIPBase(StopReason):
+            def __init__(self, action: str, entries: Dict[bytes, bytes]):
+                self.thread_id: int = rdcp_response.get_int_property(entries, b"thread")
+                self.message: Optional[str] = rdcp_response.get_utf_property(
+                    entries, b"string"
+                )
+
+                attributes = {"thread": "%d" % self.thread_id}
+
+                if self.message:
+                    attributes["message"] = self.message
+                super().__init__(action, attributes)
+
+        class RIP(_RIPBase):
+            def __init__(self, entries: Dict[bytes, bytes]):
+                super().__init__("RIP", entries)
+
+        class RIPStop(_RIPBase):
+            def __init__(self, entries: Dict[bytes, bytes]):
+                super().__init__("RIP_STOP", entries)
+
         def __init__(self, response: rdcp_response.RDCPResponse):
             super().__init__(response)
 
@@ -1313,7 +1577,76 @@ class IsStopped(ProcessedCommand):
             if not self.ok:
                 return
 
-            self.stopped = self.status == rdcp_response.RDCPResponse.STATUS_OK
+            self.stopped: bool = self.status == rdcp_response.RDCPResponse.STATUS_OK
+
+            self.reason: Optional[IsStopped.Response.StopReason] = None
+            if not self.stopped:
+                return
+
+            full_reason = response.data.decode("utf-8")
+            reason, info = full_reason.split(" ", 1)
+
+            entries = response.parse_data_map()
+
+            if reason == "stopped":
+                self.reason = self.Unknown()
+                return
+
+            if reason == "debugstr":
+                self.reason = self.Debugstr(entries)
+                return
+
+            if reason == "assert":
+                self.reason = self.Assertion(entries)
+                return
+
+            if reason == "break":
+                self.reason = self.Breakpoint(entries)
+                return
+
+            if reason == "singlestep":
+                self.reason = self.SingleStep(entries)
+                return
+
+            if reason == "data":
+                self.reason = self.DataBreakpoint(entries)
+                return
+
+            if reason == "execution":
+                self.reason = self.ExecutionStateChange(info)
+                return
+
+            if reason == "exception":
+                self.reason = self.Exception(entries)
+                return
+
+            if reason == "create":
+                self.reason = self.CreateThread(entries)
+                return
+
+            if reason == "terminate":
+                self.reason = self.TerminateThread(entries)
+                return
+
+            if reason == "modload":
+                self.reason = self.ModuleLoad(entries)
+                return
+
+            if reason == "sectload":
+                self.reason = self.SectionLoad(entries)
+                return
+
+            if reason == "sectunload":
+                self.reason = self.SectionUnload(entries)
+                return
+
+            if reason == "rip":
+                self.reason = self.RIP(entries)
+                return
+
+            if reason == "ripstop":
+                self.reason = self.RIPStop(entries)
+                return
 
         @property
         def ok(self) -> bool:
@@ -1325,7 +1658,7 @@ class IsStopped(ProcessedCommand):
         @property
         def _body_str(self) -> str:
             if self.stopped:
-                return "Stopped"
+                return f"Stopped: {self.reason}"
             return "Not stopped"
 
     def __init__(self, thread_id: int, handler=None):

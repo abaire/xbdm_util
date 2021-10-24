@@ -16,6 +16,11 @@ class Result(enum.Enum):
     EXIT_REQUESTED = 2
 
 
+def _boolean_value(argument: str) -> bool:
+    arg = argument.lower()
+    return arg == "true" or arg == "1" or arg == "t" or arg == "yes" or arg == "y"
+
+
 def _cmd_exit(_shell, _args: [str]) -> Result:
     """
 
@@ -102,7 +107,7 @@ def _cmd_debugger_attach(shell, _args: [str]) -> Result:
     if shell._debugger_context:
         print("Already in debug mode.")
     else:
-        shell._attach_debugger()
+        _attach_debugger(shell)
     return Result.HANDLED
 
 
@@ -132,7 +137,19 @@ def _cmd_debugger_set_active_thread(shell, args: [str]) -> Result:
     return Result.HANDLED
 
 
-def _cmd_debugger_step(shell, _args: [str]) -> Result:
+def _cmd_debugger_step_instruction(shell, _args: [str]) -> Result:
+    """
+
+    Step one instruction in the current thread."""
+    if not shell._debugger_context:
+        print("ERROR: /attach debugger first.")
+        return Result.HANDLED
+
+    shell._debugger_context.step_instruction()
+    return Result.HANDLED
+
+
+def _cmd_debugger_step_function(shell, _args: [str]) -> Result:
     """
 
     Step one function call in the current thread."""
@@ -216,6 +233,123 @@ def _cmd_debugger_getfullcontext(shell, _args: [str]) -> Result:
     return Result.HANDLED
 
 
+def _cmd_debugger_halt_all(shell, _args: [str]) -> Result:
+    """
+
+    Halts all threads in the debugger."""
+    if not shell._debugger_context:
+        print("ERROR: /attach debugger first.")
+        return Result.HANDLED
+
+    if not shell._debugger_context.halt():
+        print("Failed.")
+
+    return Result.HANDLED
+
+
+def _cmd_debugger_halt(shell, _args: [str]) -> Result:
+    """
+
+    Halts the active thread in the debugger."""
+    if not shell._debugger_context:
+        print("ERROR: /attach debugger first.")
+        return Result.HANDLED
+
+    thread: Optional[Thread] = shell._debugger_context.active_thread
+    if not thread:
+        print("/switch to a valid thread first.")
+        return Result.HANDLED
+
+    if not thread.halt():
+        print("Failed.")
+
+    return Result.HANDLED
+
+
+def _cmd_debugger_continue_all(shell, args: [str]) -> Result:
+    """[no_break_on_exceptions]
+
+    Continues all halted threads in the debugger.
+
+    no_break_on_exceptions - if true, do not break on exceptions when continuing.
+    """
+    if not shell._debugger_context:
+        print("ERROR: /attach debugger first.")
+        return Result.HANDLED
+
+    break_on_exceptions = True
+    if args:
+        break_on_exceptions = not _boolean_value(args[0])
+
+    shell._debugger_context.continue_all(break_on_exceptions)
+
+    return Result.HANDLED
+
+
+def _cmd_debugger_continue(shell, args: [str]) -> Result:
+    """[no_break_on_exceptions]
+
+    Continues the active thread in the debugger.
+
+    no_break_on_exceptions - if true, do not break on exceptions when continuing.
+    """
+    if not shell._debugger_context:
+        print("ERROR: /attach debugger first.")
+        return Result.HANDLED
+
+    thread: Optional[Thread] = shell._debugger_context.active_thread
+    if not thread:
+        print("/switch to a valid thread first.")
+        return Result.HANDLED
+
+    break_on_exceptions = True
+    if args:
+        break_on_exceptions = not _boolean_value(args[0])
+
+    if not thread.continue_once(break_on_exceptions=break_on_exceptions):
+        print("Failed.")
+
+    return Result.HANDLED
+
+
+def _cmd_debugger_suspend(shell, _args: [str]) -> Result:
+    """
+
+    Suspends (or raises the suspend count on) the active thread."""
+    if not shell._debugger_context:
+        print("ERROR: /attach debugger first.")
+        return Result.HANDLED
+
+    thread: Optional[Thread] = shell._debugger_context.active_thread
+    if not thread:
+        print("/switch to a valid thread first.")
+        return Result.HANDLED
+
+    if not thread.suspend():
+        print("Failed.")
+
+    return Result.HANDLED
+
+
+def _cmd_debugger_resume(shell, _args: [str]) -> Result:
+    """
+
+    Resumes (or reduces the suspend count on) the active thread."""
+    if not shell._debugger_context:
+        print("ERROR: /attach debugger first.")
+        return Result.HANDLED
+
+    thread: Optional[Thread] = shell._debugger_context.active_thread
+    if not thread:
+        print("/switch to a valid thread first.")
+        return Result.HANDLED
+
+    if not thread.resume():
+        print("Failed.")
+
+    return Result.HANDLED
+
+
 def _attach_debugger(shell):
     if not shell._debugger_context:
         shell._debugger_context = Debugger(shell._conn)
@@ -236,7 +370,14 @@ DISPATCH_TABLE = {
     "/restart": _cmd_debugger_restart,
     "/switch": _cmd_debugger_set_active_thread,
     "/threads": _cmd_debugger_get_thread_info,
-    "/step": _cmd_debugger_step,
+    "/stepi": _cmd_debugger_step_instruction,
+    "/stepfun": _cmd_debugger_step_function,
     "/context": _cmd_debugger_getcontext,
     "/fullcontext": _cmd_debugger_getfullcontext,
+    "/haltall": _cmd_debugger_halt_all,
+    "/halt": _cmd_debugger_halt,
+    "/continueall": _cmd_debugger_continue_all,
+    "/continue": _cmd_debugger_continue,
+    "/suspend": _cmd_debugger_suspend,
+    "/resume": _cmd_debugger_resume,
 }
