@@ -5,6 +5,7 @@ import collections
 import logging
 import os
 import re
+import threading
 import time
 
 from xbdm import rdcp_command
@@ -77,7 +78,10 @@ class Thread(_XBDMClient):
         lines = [
             f"Thread: {self.thread_id}",
             "  Priority: %d %s"
-            % (self.priority, "[SuspendCount]" if self.suspend_count else ""),
+            % (
+                self.priority,
+                f"[Suspended {self.suspend_count}]" if self.suspend_count else "",
+            ),
             "  Base : 0x%X" % (self.base_addr or 0),
             "  Start: 0x%X" % (self.start_addr or 0),
             "  Thread Local Base: 0x%X" % (self.thread_local_storage_addr or 0),
@@ -299,6 +303,14 @@ class Debugger(_XBDMClient):
         self._module_table: Dict[str, Module] = {}
         self._section_table: Dict[int, Section] = {}
 
+        self._running = True
+        self._notification_queue_cv = threading.Condition()
+        self._notification_queue = collections.deque()
+        self._notification_processor_thread = threading.Thread(
+            target=self._notification_processor_thread_main,
+            name=f"Debugger Notification Processor",
+        )
+        self._notification_processor_thread.start()
         self._notification_channel_connected = False
         self._hello_received = False
 
@@ -337,6 +349,8 @@ class Debugger(_XBDMClient):
     def shutdown(self):
         if self._debug_port:
             self._connection.destroy_notification_listener(self._debug_port)
+        self._running = False
+        self._notification_processor_thread.join()
 
     def attach(self):
         """Attaches this debugger instance."""
@@ -495,12 +509,28 @@ class Debugger(_XBDMClient):
             self._hello_received = True
             return
 
-        for key, handler in self._notification_handler_map.items():
-            if message.startswith(key):
-                handler(message[len(key) :])
-                return
+        with self._notification_queue_cv:
+            self._notification_queue.appendleft(message)
+            self._notification_queue_cv.notify()
 
-        logger.warning(f"UNHANDLED DEBUGGER NOTIFICATION: '{message}'")
+    def _notification_processor_thread_main(self):
+        while self._running:
+            with self._notification_queue_cv:
+                process = self._notification_queue_cv.wait_for(
+                    lambda: len(self._notification_queue) > 0, timeout=0.1
+                )
+                if not process:
+                    continue
+                message = self._notification_queue.pop()
+
+            handled = False
+            for key, handler in self._notification_handler_map.items():
+                if message.startswith(key):
+                    handler(message[len(key) :])
+                    handled = True
+                    break
+            if not handled:
+                logger.warning(f"UNHANDLED DEBUGGER NOTIFICATION: '{message}'")
 
     def _process_vx(self, message):
         print(f"VX: {message}")
@@ -581,6 +611,7 @@ class Debugger(_XBDMClient):
 
         address = int(match.group(1), 0)
         thread_id = int(match.group(2), 0)
+        reason = match.group(3)
 
         thread = self._threads.get(thread_id)
         if not thread:
@@ -590,3 +621,5 @@ class Debugger(_XBDMClient):
 
         thread.last_known_address = address
         self._active_thread_id = thread_id
+
+        logger.debug("!!! BREAK !!! %d @ 0x%X %s" % (thread_id, address, reason))

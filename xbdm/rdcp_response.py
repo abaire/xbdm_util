@@ -102,6 +102,8 @@ class RDCPResponse:
     STATUS_BINARY_RESPONSE = 203
     STATUS_SEND_BINARY_DATA = 204
     STATUS_CONNECTION_DEDICATED = 205
+    STATUS_ERR_NOT_STOPPED = 408
+    STATUS_ERR_EXISTS = 410
 
     STATUS_CODES = {
         0: "INVALID",
@@ -119,9 +121,9 @@ class RDCPResponse:
         405: "no such thread",
         406: "failed to set system time",
         407: "unknown command",
-        408: "not stopped",
+        STATUS_ERR_NOT_STOPPED: "not stopped",
         409: "file must be copied",
-        410: "file already exists",
+        STATUS_ERR_EXISTS: "file already exists",
         411: "directory not empty",
         412: "filename is invalid",
         413: "file cannot be created",

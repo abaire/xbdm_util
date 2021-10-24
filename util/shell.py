@@ -681,6 +681,7 @@ class Shell:
         info: Optional[Thread.Context] = self._debugger_context.get_thread_context()
         if not info:
             print("/switch to a valid thread and stop first.")
+            return self.Result.HANDLED
 
         ordered_registers = [
             "Eip",

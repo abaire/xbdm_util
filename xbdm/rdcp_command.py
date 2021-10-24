@@ -766,7 +766,11 @@ class GetContext(ProcessedCommand):
 
         @property
         def _body_str(self) -> str:
-            return ", ".join(self.registers.items())
+            registers = [
+                f"{key} {'0x%X' % value if value is not None else '???'}"
+                for key, value in self.registers.items()
+            ]
+            return ", ".join(registers)
 
     def __init__(
         self,
@@ -1267,8 +1271,31 @@ class IsBreak(ProcessedCommand):
 class IsDebugger(ProcessedCommand):
     """Checks to see if the debugger is allowed to attach?"""
 
-    class Response(_ProcessedRawBodyResponse):
-        pass
+    class Response(_ProcessedResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            self.debugger_attached: Optional[bool] = None
+
+            if not self.ok:
+                return
+
+            self.debugger_attached = (
+                self.status == rdcp_response.RDCPResponse.STATUS_ERR_EXISTS
+            )
+
+        @property
+        def ok(self) -> bool:
+            return (
+                self.status == rdcp_response.RDCPResponse.STATUS_OK
+                or self.status == rdcp_response.RDCPResponse.STATUS_ERR_EXISTS
+            )
+
+        @property
+        def _body_str(self) -> str:
+            if self.debugger_attached:
+                return "Debugger attached"
+            return "No debugger attached"
 
     def __init__(self, handler=None):
         super().__init__("isdebugger", response_class=self.Response, handler=handler)
@@ -1277,9 +1304,29 @@ class IsDebugger(ProcessedCommand):
 class IsStopped(ProcessedCommand):
     """Checks to see if the given thread is stopped."""
 
-    class Response(_ProcessedRawBodyResponse):
-        # TODO: Process the reason for the stoppage.
-        pass
+    class Response(_ProcessedResponse):
+        def __init__(self, response: rdcp_response.RDCPResponse):
+            super().__init__(response)
+
+            self.stopped: Optional[bool] = None
+
+            if not self.ok:
+                return
+
+            self.stopped = self.status == rdcp_response.RDCPResponse.STATUS_OK
+
+        @property
+        def ok(self) -> bool:
+            return (
+                self.status == rdcp_response.RDCPResponse.STATUS_OK
+                or self.status == rdcp_response.RDCPResponse.STATUS_ERR_NOT_STOPPED
+            )
+
+        @property
+        def _body_str(self) -> str:
+            if self.stopped:
+                return "Stopped"
+            return "Not stopped"
 
     def __init__(self, thread_id: int, handler=None):
         super().__init__("isstopped", response_class=self.Response, handler=handler)
