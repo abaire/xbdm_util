@@ -480,6 +480,7 @@ DISPATCH_TABLE = {
     "/switch": _cmd_debugger_set_active_thread,
     "/threads": _cmd_debugger_get_thread_info,
     "/stepi": _cmd_debugger_step_instruction,
+    "/stepf": _cmd_debugger_step_function,
     "/stepfun": _cmd_debugger_step_function,
     "/info": _cmd_debugger_get_all_thread_info,
     "/context": _cmd_debugger_getcontext,

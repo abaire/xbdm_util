@@ -193,6 +193,17 @@ class Thread(_XBDMClient):
         )
         return response.ok
 
+    def prepare_step_function(self) -> bool:
+        if not self.halt():
+            return False
+        if not self._set_step_function():
+            return False
+        return self.continue_once()
+
+    def _set_step_function(self) -> bool:
+        response = self._call(rdcp_command.FuncCall(self.thread_id))
+        return response.ok
+
     def halt(self) -> bool:
         """Sends a 'halt' command."""
         response = self._call(rdcp_command.Halt(self.thread_id))
@@ -480,12 +491,20 @@ class Debugger(_XBDMClient):
         return True
 
     def step_function(self) -> bool:
-        if self._active_thread_id is None:
+        thread = self.active_thread
+        if not thread:
             print("No active thread context")
             return False
 
-        response = self._call(rdcp_command.FuncCall(self._active_thread_id))
-        return response.ok
+        if not thread.prepare_step_function():
+            print("Failed to set funccall flag.")
+            return False
+
+        if not self.go():
+            print("Failed to go.")
+            return False
+
+        return True
 
     def refresh_thread_info(self):
         response = self._call(rdcp_command.Threads())
