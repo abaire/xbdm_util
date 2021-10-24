@@ -82,17 +82,16 @@ class Thread(_XBDMClient):
                 self.priority,
                 f"[Suspended {self.suspend_count}]" if self.suspend_count else "",
             ),
-            "  Base : 0x%X" % (self.base_addr or 0),
-            "  Start: 0x%X" % (self.start_addr or 0),
-            "  Thread Local Base: 0x%X" % (self.thread_local_storage_addr or 0),
-            "  Limit: 0x%X" % (self.limit or 0),
-            "  CreatedAt: %d" % (self.create_time or -1),
+            "  Base : 0x%08X" % (self.base_addr or 0),
+            "  Start: 0x%08X" % (self.start_addr or 0),
+            "  Thread Local Base: 0x%08X" % (self.thread_local_storage_addr or 0),
+            "  Limit: 0x%08X" % (self.limit or 0),
+            "  CreatedAt: 0x%08X" % (self.create_time or -1),
         ]
         return "\n".join(lines)
 
     def get_info(self):
         response = self._call(rdcp_command.ThreadInfo(self.thread_id))
-
         assert response.ok
 
         self.suspend_count = response.suspend

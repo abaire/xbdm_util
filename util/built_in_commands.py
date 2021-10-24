@@ -180,18 +180,10 @@ def _cmd_debugger_get_thread_info(shell, _args: [str]) -> Result:
     return Result.HANDLED
 
 
-def _cmd_debugger_getcontext(shell, _args: [str]) -> Result:
-    """
-
-    Print basic set of registers for the active thread context."""
-    if not shell._debugger_context:
-        print("ERROR: /attach debugger first.")
-        return Result.HANDLED
-
-    info: Optional[Thread.Context] = shell._debugger_context.get_thread_context()
+def _print_thread_context(thread_id: int, info: Optional[Thread.Context]):
     if not info:
-        print("/switch to a valid thread and stop first.")
-        return Result.HANDLED
+        print(f"Register information not available for thread {thread_id}")
+        return
 
     ordered_registers = [
         "Eip",
@@ -207,7 +199,7 @@ def _cmd_debugger_getcontext(shell, _args: [str]) -> Result:
         "Cr0NpxState",
     ]
 
-    print(f"Registers for thread {shell._debugger_context.active_thread.thread_id}:")
+    print(f"Registers for thread {thread_id}:")
     for reg in ordered_registers:
         value = info.registers.get(reg, None)
         if value is None:
@@ -216,6 +208,54 @@ def _cmd_debugger_getcontext(shell, _args: [str]) -> Result:
             value = "0x%08X" % value
         print("  %-11s: %s" % (reg, value))
 
+
+def _cmd_debugger_get_all_thread_info(shell, _args: [str]) -> Result:
+    """
+
+    Prints all possible information about the active thread context."""
+    if not shell._debugger_context:
+        print("ERROR: /attach debugger first.")
+        return Result.HANDLED
+
+    thread: Thread = shell._debugger_context.active_thread
+    if not thread:
+        print("/switch to a valid thread and stop first.")
+        return Result.HANDLED
+
+    thread.get_info()
+
+    if thread.suspend_count:
+        print(f"Suspended: count: {thread.suspend_count}")
+    print(f"Priority: {thread.priority}")
+
+    if thread.thread_local_storage_addr:
+        print("Thread local storage base: 0x%08X" % thread.thread_local_storage_addr)
+
+    print("Start address: 0x%08X" % thread.start_addr)
+    print("Base address: 0x%08X" % thread.base_addr)
+    print("Limit: 0x%08X" % thread.limit)
+    print("Create timestamp: 0x%08X" % thread.create_time)
+
+    _print_thread_context(
+        shell._debugger_context.active_thread.thread_id,
+        shell._debugger_context.get_thread_context(),
+    )
+
+
+def _cmd_debugger_getcontext(shell, _args: [str]) -> Result:
+    """
+
+    Print basic set of registers for the active thread context."""
+    if not shell._debugger_context:
+        print("ERROR: /attach debugger first.")
+        return Result.HANDLED
+
+    info: Optional[Thread.Context] = shell._debugger_context.get_thread_context()
+    if not info:
+        print("/switch to a valid thread and stop first.")
+        return Result.HANDLED
+
+    _print_thread_context(shell._debugger_context.active_thread.thread_id, info)
     return Result.HANDLED
 
 
@@ -372,6 +412,7 @@ DISPATCH_TABLE = {
     "/threads": _cmd_debugger_get_thread_info,
     "/stepi": _cmd_debugger_step_instruction,
     "/stepfun": _cmd_debugger_step_function,
+    "/info": _cmd_debugger_get_all_thread_info,
     "/context": _cmd_debugger_getcontext,
     "/fullcontext": _cmd_debugger_getfullcontext,
     "/haltall": _cmd_debugger_halt_all,
