@@ -568,5 +568,4 @@ DISPATCH_TABLE = {
     # WriteFile
     "xbeinfo": _xbe_info,
     "xtlinfo": lambda _: rdcp_command.XTLInfo(handler=print),
-    "shell": None,
 }

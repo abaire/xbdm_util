@@ -55,10 +55,10 @@ class _XBDMGrid(wx.grid.Grid):
             row = rows[row_index]
             self.SetCellValue(row_index, 0, row.xbox_name)
             self.SetCellValue(row_index, 1, f"{row.xbox_addr[0]}:{row.xbox_addr[1]}")
-            listen_ip = row.listen_addr[0]
+            listen_ip = row.remote_listen_addr[0]
             if listen_ip == "0.0.0.0":
                 listen_ip = ""
-            self.SetCellValue(row_index, 2, f"{listen_ip}:{row.listen_addr[1]}")
+            self.SetCellValue(row_index, 2, f"{listen_ip}:{row.remote_listen_addr[1]}")
 
         self.AutoSize()
 

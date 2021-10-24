@@ -4,7 +4,7 @@ import socket
 from typing import Tuple
 
 from . import ip_transport
-from . import notification_transport
+from . import xbdm_notification_transport
 from . import rdcp_command
 from . import rdcp_response
 
@@ -106,7 +106,7 @@ class XBDMTransport(ip_transport.IPTransport):
                     # TODO: Shut down the connection and start a new one?
                 else:
                     self._create_dedicated_connection(
-                        notification_transport.NotificationTransport
+                        xbdm_notification_transport.XBDMNotificationTransport
                     )
                     break
 

@@ -1,6 +1,6 @@
 import wx
 
-from xbdm import connection_manager
+from xbdm import bridge_manager
 from xbdm import discoverer
 from app import main_frame
 from app import xbdm_dialog
@@ -10,7 +10,7 @@ class Application(wx.App):
     def __init__(
         self,
         xbox_discoverer: discoverer.XBOXDiscoverer,
-        manager: connection_manager.ConnectionManager,
+        manager: bridge_manager.BridgeManager,
         *args,
         **kw,
     ):

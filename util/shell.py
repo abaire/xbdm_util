@@ -6,12 +6,12 @@ from . import built_in_commands
 from . import commands
 from xbdm import rdcp_command
 from xbdm.debugger import Debugger
-from xbdm.xbdm_connection import XBDMConnection
+from xbdm.xbdm_bridge import XBDMBridge
 
 logger = logging.getLogger(__name__)
 
 
-def execute_command(command, command_args, bridge: XBDMConnection) -> int:
+def execute_command(command, command_args, bridge: XBDMBridge) -> int:
     processor = commands.DISPATCH_TABLE.get(command)
     if not processor:
         print("Invalid command")
@@ -25,7 +25,7 @@ def execute_command(command, command_args, bridge: XBDMConnection) -> int:
 
 
 class Shell:
-    def __init__(self, conn: XBDMConnection):
+    def __init__(self, conn: XBDMBridge):
         self._conn = conn
         self._debugger_context: Optional[Debugger] = None
 

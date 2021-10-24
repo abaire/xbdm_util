@@ -12,7 +12,7 @@ import struct
 import time
 
 from xbdm import rdcp_command
-from xbdm.xbdm_connection import XBDMConnection
+from xbdm.xbdm_bridge import XBDMBridge
 
 from typing import Callable
 from typing import Dict
@@ -61,7 +61,7 @@ def _parse_ext_registers(info: bytes) -> Dict[str, int]:
 class _XBDMClient:
     """Provides functionality for communicating with an XBDMConnection."""
 
-    def __init__(self, connection: XBDMConnection):
+    def __init__(self, connection: XBDMBridge):
         self._connection = connection
 
     def _call(
@@ -107,7 +107,7 @@ class Thread(_XBDMClient):
 
     _TRAP_FLAG = 0x100
 
-    def __init__(self, thread_id: int, connection: XBDMConnection):
+    def __init__(self, thread_id: int, connection: XBDMBridge):
         super().__init__(connection)
         self.thread_id = thread_id
 
@@ -355,7 +355,7 @@ class Section:
 class Debugger(_XBDMClient):
     """Provides high level debugger functionality."""
 
-    def __init__(self, connection: XBDMConnection):
+    def __init__(self, connection: XBDMBridge):
         super().__init__(connection)
         self._debug_port = None
 

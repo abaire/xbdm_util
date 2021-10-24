@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import socket
+from typing import Callable
 from typing import Optional
 from typing import Tuple
 from typing import Union
@@ -12,13 +13,17 @@ logger = logging.getLogger(__name__)
 class IPTransport:
     """Models low level bidirectional socket transport."""
 
-    def __init__(self, process_callback, name=""):
-        self.name = name
+    def __init__(
+        self,
+        process_callback: Optional[Callable[[IPTransport], None]] = None,
+        name: Optional[str] = None,
+    ):
+        self.name: Optional[str] = name
         self._sock: Optional[socket.socket] = None
         self.addr: Optional[Tuple[str, int]] = None
         self._read_buffer = bytearray()
         self._write_buffer = bytearray()
-        self._on_bytes_read = process_callback
+        self._on_bytes_read: Optional[Callable[[IPTransport], None]] = process_callback
 
         self._sub_connections = set()
 

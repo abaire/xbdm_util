@@ -4,14 +4,67 @@
 import argparse
 import logging
 import sys
+from typing import List
 from typing import Tuple
 
-from xbdm import connection_manager
-from util import shell
+from gdb import gdb_stub
 from util import commands
+from util import shell
+from xbdm import bridge_manager
+from xbdm import rdcp_command
 
 XBDM_PORT = 731
 logger = logging.getLogger(__name__)
+
+_REMOTE_BUILDERS = {
+    "gdb": gdb_stub._handle_build_command,
+}
+
+
+def _run_bridge(
+    args: List[str],
+    manager: bridge_manager.BridgeManager,
+    local_ip: str,
+    xbox_ip: str,
+    xbox_port: int,
+) -> int:
+    if not args:
+        print(f"Usage: bridge [{' | '.join(sorted(_REMOTE_BUILDERS.keys()))}]")
+        return 1
+
+    builder_type = args[0].lower()
+    builder = _REMOTE_BUILDERS.get(builder_type)
+    if not builder:
+        print(f"Usage: bridge [{' | '.join(sorted(_REMOTE_BUILDERS.keys()))}]")
+        return 1
+
+    builder = builder(args[1:])
+    if not builder:
+        return 1
+
+    port_index = args.index("port") if "port" in args else -1
+    if port_index >= 0:
+        local_port = int(args[port_index + 1], 0)
+    else:
+        local_port = 0
+
+    manager.start_bridge((local_ip, local_port), "XBOX", (xbox_ip, xbox_port), builder)
+    bridge = manager.get_bridge((xbox_ip, xbox_port))
+    print(f"Connecting to XBDM at {xbox_ip}@{xbox_port}")
+    print(f"Listening for {builder_type} connections at {bridge.remote_listen_addr}")
+
+    bridge.connect_xbdm()
+    print("Enter 'quit' or 'exit' to shut down.")
+    for line in sys.stdin:
+        line = line.strip()
+        if line.startswith("quit") or line.startswith("exit"):
+            print("Exiting gracefully...")
+            bridge.send_command(rdcp_command.Bye())
+            bridge.await_empty_queue()
+            return 0
+        print("Enter 'quit' or 'exit' to shut down.")
+
+    return 0
 
 
 def main(args):
@@ -22,26 +75,34 @@ def main(args):
 
     logger.debug("Startup")
 
-    manager = connection_manager.ConnectionManager()
-
+    manager = bridge_manager.BridgeManager()
     xbox_ip, xbox_port = args.xbox
-    manager.start_bridge(args.discovery_listen_ip, "XBOX", (xbox_ip, xbox_port))
-    bridge = manager.get_bridge((xbox_ip, xbox_port))
-
     ret = 0
-    if not (bridge.can_process_xbdm_commands or bridge.connect_xbdm()):
-        print("Failed to communicate with XBOX")
-        manager.shutdown()
-        return 1
 
     try:
         command = args.command.lower()
-        if command == "shell":
-            shell.Shell(bridge).run()
+        if command == "bridge":
+            ret = _run_bridge(
+                args.command_args, manager, args.listen_ip, xbox_ip, xbox_port
+            )
         else:
-            command_args = args.command_args
-            ret = shell.execute_command(command, command_args, bridge)
-        bridge.await_empty_queue()
+            manager.start_bridge(None, "XBOX", (xbox_ip, xbox_port))
+            bridge = manager.get_bridge((xbox_ip, xbox_port))
+
+            if not (
+                bridge or bridge.can_process_xbdm_commands or bridge.connect_xbdm()
+            ):
+                print("Failed to communicate with XBOX")
+                manager.shutdown()
+                return 1
+
+            if command == "shell":
+                shell.Shell(bridge).run()
+            else:
+                command_args = args.command_args
+                ret = shell.execute_command(command, command_args, bridge)
+            bridge.await_empty_queue()
+
     except ConnectionResetError:
         print("Connection closed by XBOX")
     except:
@@ -76,20 +137,22 @@ if __name__ == "__main__":
         help="The xbox to interact with. Format: ip[:port].",
     )
 
+    known_commands = ["shell", "bridge"]
+    known_commands.extend(commands.DISPATCH_TABLE.keys())
     parser.add_argument(
         "command",
-        choices=sorted(commands.DISPATCH_TABLE.keys()),
+        choices=sorted(known_commands),
         help="The command to invoke.",
     )
 
     parser.add_argument("command_args", nargs="*", help="Parameters for the command.")
 
     parser.add_argument(
-        "-dip",
-        "--discovery_listen_ip",
+        "-lip",
+        "--listen_ip",
         metavar="ip_address",
         default="",
-        help="IP address to listen on for XBOX devkits.",
+        help="IP address to listen on for bridge connections.",
     )
 
     parser.add_argument(

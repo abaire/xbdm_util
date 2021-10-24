@@ -1,4 +1,6 @@
 """Manages a transport interface to an XBDM."""
+from __future__ import annotations
+
 import logging
 import select
 import socket
@@ -8,27 +10,39 @@ from typing import Callable
 from typing import Optional
 from typing import Tuple
 
-from . import notification_transport
+from . import xbdm_bridge_remote_server
+from . import xbdm_notification_server
 from . import rdcp_command
+from . import ip_transport
 from . import xbdm_transport
 
 SELECT_TIMEOUT_SECS = 0.25
 logger = logging.getLogger(__name__)
 
 
-class XBDMConnection:
+class XBDMBridge:
     """Manages an XBDM connection."""
 
-    def __init__(self, listen_ip: str, xbox_name: str, xbox_addr: Tuple[str, int]):
-        self.listen_ip = listen_ip
-        self.xbox_name = xbox_name
-        self.xbox_addr = xbox_addr
+    def __init__(
+        self,
+        listen_addr: Optional[Tuple[str, int]],
+        xbox_name: str,
+        xbox_addr: Tuple[str, int],
+        remote_connected_handler: Optional[
+            Callable[
+                [xbdm_transport.XBDMTransport, socket.socket, Tuple[str, int]],
+                Optional[ip_transport.IPTransport],
+            ]
+        ] = None,
+    ):
+        self.remote_listen_addr: Optional[Tuple[str, int]] = listen_addr
+        self._remote_connected_handler = remote_connected_handler
+        self.xbox_name: str = xbox_name
+        self.xbox_addr: Tuple[str, int] = xbox_addr
 
         self._xbdm: Optional[xbdm_transport.XBDMTransport] = None
         self._dedicated_channels = set()
 
-        self._listen_sock: Optional[socket.socket] = None
-        self.listen_addr: Optional[Tuple[str, int]] = None
         self._running: bool = False
         self._thread: Optional[threading.Thread] = None
 
@@ -62,11 +76,16 @@ class XBDMConnection:
         return self.can_process_xbdm_commands
 
     def _startup(self):
-        self._listen_sock = socket.create_server((self.listen_ip, 0), backlog=1)
-        self.listen_addr = self._listen_sock.getsockname()
-        logger.info(
-            f"Bridging connections to {self.xbox_info} at port {self.listen_addr[1]}"
-        )
+        if self.remote_listen_addr is not None and self._remote_connected_handler:
+            server = xbdm_bridge_remote_server.XBDMBridgeRemoteServer(
+                self.xbox_info, self.remote_listen_addr, self._on_remote_bridge_accepted
+            )
+            # Update the listen_addr in case a port or IP was left unset.
+            self.remote_listen_addr = server.addr
+            self._dedicated_channels.add(server)
+            logger.info(
+                f"Listening at port {server.addr[1]} and bridging to {self.xbox_info}"
+            )
 
         self._xbdm = xbdm_transport.XBDMTransport("XBDM")
 
@@ -119,16 +138,18 @@ class XBDMConnection:
         """Creates a new dedicated notification listener on the given port."""
         if not port:
             port = 0
-        new_transport = notification_transport.NotificationServer(
+        server = xbdm_notification_server.XBDMNotificationServer(
             ("", port), handler=handler
         )
-        self._dedicated_channels.add(new_transport)
-        return new_transport.addr
+        self._dedicated_channels.add(server)
+        return server.addr
 
     def destroy_notification_listener(self, port: int):
         """Closes an existing dedicated notification listener."""
         for transport in self._dedicated_channels:
-            if not isinstance(transport, notification_transport.NotificationServer):
+            if not isinstance(
+                transport, xbdm_notification_server.XBDMNotificationServer
+            ):
                 continue
             if not transport.addr[1] == port:
                 continue
@@ -142,15 +163,16 @@ class XBDMConnection:
     def debugger__set_control_channel_state_to_connected(self):
         """Marks the underlying XBDMTransport as fully connected if it has a socket connection.
 
-        This is necessary as XBDM will not send a connection event when restarting with a debug notification channel already in place.
+        This is necessary as XBDM will not send a connection event when
+        restarting with a debug notification channel already in place.
         """
         self._xbdm.debug__notify_connected()
 
     def _thread_main(self):
         while self._running:
-            readable = [self._listen_sock]
+            readable = []
             writable = []
-            exceptional = [self._listen_sock]
+            exceptional = []
 
             self._xbdm.select(readable, writable, exceptional)
 
@@ -171,7 +193,6 @@ class XBDMConnection:
                 if not self._xbdm.process(readable, writable, exceptional):
                     self._xbdm.close()
                     print("XBDM connection closed")
-
             except ConnectionResetError as e:
                 logger.error("TODO: handle connection reset gracefully")
                 logger.error(e)
@@ -179,6 +200,16 @@ class XBDMConnection:
 
         logger.debug(f"Shutting down connection for {self.xbox_info}")
         self._close()
+
+    def _on_remote_bridge_accepted(
+        self, remote: socket.socket, remote_addr: Tuple[str, int]
+    ) -> Optional[ip_transport.IPTransport]:
+        transport: Optional[ip_transport.IPTransport] = self._remote_connected_handler(
+            self._xbdm, remote, remote_addr
+        )
+        if not transport:
+            logger.debug(f"Denied bridge request from {remote_addr}")
+        return transport
 
     def await_empty_queue(self) -> None:
         assert threading.current_thread() != self._thread

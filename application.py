@@ -8,7 +8,7 @@ import time
 from typing import Tuple
 
 import app
-from xbdm import connection_manager
+from xbdm import bridge_manager
 from xbdm import discoverer
 
 XBDM_PORT = 731
@@ -23,7 +23,7 @@ def main(args):
 
     logger.debug("Startup")
 
-    manager = connection_manager.ConnectionManager()
+    manager = bridge_manager.BridgeManager()
     xbox_discoverer = discoverer.XBOXDiscoverer(
         args.discovery_listen_ip, args.discovery_port
     )
