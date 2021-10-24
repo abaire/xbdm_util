@@ -308,12 +308,6 @@ def _cmd_debugger_get_all_thread_info(shell, _args: [str]) -> Result:
     print("Base address: 0x%08X" % thread.base_addr)
     print("Limit: 0x%08X" % thread.limit)
     print("Create timestamp: 0x%08X" % thread.create_time)
-
-    _print_thread_context(
-        shell._debugger_context.active_thread.thread_id,
-        context,
-    )
-
     _print_thread_ext_context(shell._debugger_context.active_thread.thread_id, context)
 
 

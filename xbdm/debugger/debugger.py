@@ -451,6 +451,10 @@ class Debugger(_XBDMClient):
     def set_active_thread(self, thread_id: Optional[int]):
         self._active_thread_id = thread_id
 
+    def go(self) -> bool:
+        response = self._call(rdcp_command.Go())
+        return response.ok
+
     def step_instruction(self) -> bool:
         thread = self.active_thread
         if not thread:
@@ -462,11 +466,15 @@ class Debugger(_XBDMClient):
             return False
 
         if not thread.continue_once():
-            print("Failed to continue.")
+            print("Failed to continue thread.")
             return False
 
         if not thread.set_step_instruction_mode(False):
             print("Failed to clear trap flag.")
+            return False
+
+        if not self.go():
+            print("Failed to go.")
             return False
 
         return True
