@@ -43,7 +43,12 @@ class Shell:
             command = line[0].lower()
             command_args = line[1:]
 
-            result = self._handle_shell_command(command, command_args)
+            try:
+                result = self._handle_shell_command(command, command_args)
+            except:
+                print("Invalid command")
+                self._print_prompt()
+                continue
 
             if result == built_in_commands.Result.EXIT_REQUESTED:
                 break

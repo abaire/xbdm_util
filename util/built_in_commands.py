@@ -6,8 +6,8 @@ from typing import List
 from typing import Optional
 
 from . import commands
-from xbdm.debugger import Debugger
 from xbdm import rdcp_command
+from xbdm.debugger import Debugger
 from xbdm.debugger import Thread
 
 
@@ -97,7 +97,8 @@ def _cmd_debugger_launch(shell, args: [str]) -> Result:
     else:
         command_line = None
 
-    shell._debugger_context.debug_xbe(args[0], command_line=command_line)
+    debugger: Debugger = shell._debugger_context
+    debugger.debug_xbe(args[0], command_line=command_line)
     return Result.HANDLED
 
 
@@ -120,7 +121,8 @@ def _cmd_debugger_restart(shell, _args: [str]) -> Result:
         print("ERROR: /attach debugger first.")
         return Result.HANDLED
 
-    shell._debugger_context.restart()
+    debugger: Debugger = shell._debugger_context
+    debugger.restart()
     return Result.HANDLED
 
 
@@ -134,7 +136,8 @@ def _cmd_debugger_set_active_thread(shell, args: [str]) -> Result:
         return Result.HANDLED
 
     thread_id = int(args[0], 0)
-    shell._debugger_context.set_active_thread(thread_id)
+    debugger: Debugger = shell._debugger_context
+    debugger.set_active_thread(thread_id)
     return Result.HANDLED
 
 
@@ -146,7 +149,8 @@ def _cmd_debugger_step_instruction(shell, _args: [str]) -> Result:
         print("ERROR: /attach debugger first.")
         return Result.HANDLED
 
-    shell._debugger_context.step_instruction()
+    debugger: Debugger = shell._debugger_context
+    debugger.step_instruction()
     return Result.HANDLED
 
 
@@ -158,7 +162,8 @@ def _cmd_debugger_step_function(shell, _args: [str]) -> Result:
         print("ERROR: /attach debugger first.")
         return Result.HANDLED
 
-    shell._debugger_context.step_function()
+    debugger: Debugger = shell._debugger_context
+    debugger.step_function()
     return Result.HANDLED
 
 

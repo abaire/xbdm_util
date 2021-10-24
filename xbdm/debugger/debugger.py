@@ -575,7 +575,7 @@ class Debugger(_XBDMClient):
 
         # Wait for XBDM to say "hello" on the debug channel
         logger.debug("Waiting for XBOX to become available.")
-        max_wait = 60000
+        max_wait = 30000
         while not self._hello_received:
             time.sleep(busy_wait_secs)
             max_wait -= busy_wait_secs
