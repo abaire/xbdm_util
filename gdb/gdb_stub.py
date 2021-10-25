@@ -10,6 +10,7 @@ import collections
 import logging
 import socket
 from typing import Callable
+from typing import Dict
 from typing import List
 from typing import Mapping
 from typing import Optional
@@ -25,10 +26,18 @@ logger = logging.getLogger(__name__)
 class GDBTransport(ip_transport.IPTransport):
     """GDB Remote Serial Protocol translation of XDBM functions."""
 
+    # Indicates that a request should apply to all threads.
+    TID_ALL_THREADS = -1
+    # Indicates that a request should apply to any arbitrary thread.
+    TID_ANY_THREAD = 0
+
     def __init__(self, xbdm: xbdm_transport.XBDMTransport):
         super().__init__(process_callback=self._on_bytes_read)
         self._xbdm: xbdm_transport.XBDMTransport = xbdm
         self._send_queue = collections.deque()
+
+        # Maps a command type to the thread id that should be used when interpreting that command.
+        self._command_thread_id_context: Dict[str, int] = {}
 
         self.features = {"QStartNoAckMode": False}
         self._dispatch_table: Mapping[
@@ -159,7 +168,7 @@ class GDBTransport(ip_transport.IPTransport):
             "F": target._handle_file_io,
             "g": target._handle_read_general_register,
             "G": target._handle_write_general_register,
-            "H": target._handle_set_active_thread,
+            "H": target._handle_select_thread_for_command_group,
             "i": target._handle_step_instruction,
             "I": target._handle_signal_step,
             "k": target._handle_kill,
@@ -229,9 +238,16 @@ class GDBTransport(ip_transport.IPTransport):
         logger.error(f"Unsupported packet {pkt.data}")
         self.send_packet(GDBPacket())
 
-    def _handle_set_active_thread(self, pkt: GDBPacket):
-        logger.error(f"Unsupported packet {pkt.data}")
-        self.send_packet(GDBPacket())
+    def _handle_select_thread_for_command_group(self, pkt: GDBPacket):
+        if len(pkt.data) < 3:
+            logger.error(f"Command missing parameters: {pkt.data}")
+            self.send_packet(GDBPacket("E"))
+            return
+
+        op = pkt.data[1]
+        thread_id = int(pkt.data[2:], 16)
+        self._command_thread_id_context[op] = thread_id
+        self.send_packet(GDBPacket("OK"))
 
     def _handle_step_instruction(self, pkt: GDBPacket):
         logger.error(f"Unsupported packet {pkt.data}")
@@ -262,8 +278,14 @@ class GDBTransport(ip_transport.IPTransport):
         self.send_packet(GDBPacket())
 
     def _handle_read_query(self, pkt: GDBPacket):
-        if pkt.data.startswith("qSupported"):
-            self._handle_supported_query(pkt)
+        query = pkt.data[1:]
+
+        if query.startswith("Attached"):
+            self._handle_query_attached(pkt)
+            return
+
+        if query.startswith("Supported"):
+            self._handle_query_supported(pkt)
             return
 
         # if p.data == "qTStatus":
@@ -321,7 +343,13 @@ class GDBTransport(ip_transport.IPTransport):
         logger.error(f"Unsupported packet {pkt.data}")
         self.send_packet(GDBPacket())
 
-    def _handle_supported_query(self, pkt: GDBPacket):
+    def _handle_query_attached(self, _pkt: GDBPacket):
+        # If attached to an existing process:
+        self.send_packet(GDBPacket("1"))
+        # elif started new process
+        # self.send_packet(GDBPacket("0"))
+
+    def _handle_query_supported(self, pkt: GDBPacket):
         request = pkt.data.split(":", 1)
         if len(request) != 2:
             logger.error(f"Unsupported qSupported message {pkt.data}")
