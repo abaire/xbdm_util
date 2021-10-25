@@ -17,7 +17,6 @@ from xbdm.xbdm_bridge import XBDMBridge
 from typing import Callable
 from typing import Dict
 from typing import Iterable
-from typing import List
 from typing import Optional
 
 logger = logging.getLogger(__name__)

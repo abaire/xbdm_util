@@ -18,7 +18,8 @@ from typing import Tuple
 
 from .packet import GDBPacket
 from net import ip_transport
-from xbdm import xbdm_transport
+from xbdm import debugger
+from xbdm import xbdm_bridge
 
 logger = logging.getLogger(__name__)
 
@@ -31,9 +32,10 @@ class GDBTransport(ip_transport.IPTransport):
     # Indicates that a request should apply to any arbitrary thread.
     TID_ANY_THREAD = 0
 
-    def __init__(self, xbdm: xbdm_transport.XBDMTransport):
-        super().__init__(process_callback=self._on_bytes_read)
-        self._xbdm: xbdm_transport.XBDMTransport = xbdm
+    def __init__(self, bridge: xbdm_bridge.XBDMBridge, name: str):
+        super().__init__(process_callback=self._on_bytes_read, name=name)
+        self._bridge: xbdm_bridge.XBDMBridge = bridge
+
         self._send_queue = collections.deque()
 
         # Maps a command type to the thread id that should be used when interpreting that command.
@@ -45,6 +47,17 @@ class GDBTransport(ip_transport.IPTransport):
         ] = self._build_dispatch_table(self)
 
         self._thread_info_buffer: List[int] = []
+
+    def start(self):
+        self._debugger = debugger.Debugger(self._bridge)
+        self._debugger.attach()
+
+    def close(self):
+        if self._debugger:
+            self._debugger.shutdown()
+            self._debugger = None
+
+        super().close()
 
     @property
     def has_buffered_data(self) -> bool:
@@ -410,15 +423,15 @@ class GDBTransport(ip_transport.IPTransport):
         pkt = GDBPacket(";".join(response))
         self.send_packet(pkt)
 
-    def _handle_thread_info_start(self, pkt: GDBPacket):
-        # TODO: Request the thread list from the remote.
+    def _handle_thread_info_start(self):
+        self._thread_info_buffer = [thr.thread_id for thr in self._debugger.threads]
 
         if not self._thread_info_buffer:
             self.send_packet(GDBPacket("l"))
             return
         self._send_thread_info()
 
-    def _handle_thread_info_continue(self, pkt: GDBPacket):
+    def _handle_thread_info_continue(self):
         if not self._thread_info_buffer:
             self.send_packet(GDBPacket("l"))
             return
@@ -426,7 +439,7 @@ class GDBTransport(ip_transport.IPTransport):
 
     def _send_thread_info(self, send_all: bool = True):
         if send_all:
-            threads = ",".join(["%x" % id for id in self._thread_info_buffer])
+            threads = ",".join(["%x" % tid for tid in self._thread_info_buffer])
             self.send_packet(GDBPacket(f"m{threads}"))
             self._thread_info_buffer.clear()
             return
@@ -442,16 +455,17 @@ def _handle_build_command(
     _args: List[str],
 ) -> Optional[
     Callable[
-        [xbdm_transport.XBDMTransport, socket.socket, Tuple[str, int]],
+        [xbdm_bridge.XBDMBridge, socket.socket, Tuple[str, int]],
         Optional[ip_transport.IPTransport],
     ]
 ]:
     def construct_transport(
-        xbdm: xbdm_transport.XBDMTransport,
+        bridge: xbdm_bridge.XBDMBridge,
         remote: socket.socket,
         remote_addr: Tuple[str, int],
     ) -> Optional[ip_transport.IPTransport]:
-        ret = GDBTransport(xbdm)
+
+        ret = GDBTransport(bridge, f"GDB@{remote_addr}")
         ret.set_connection(remote, remote_addr)
         return ret
 

@@ -61,7 +61,7 @@ def _cmd_reconnect(shell, _args: [str]) -> Result:
     """
 
     Attempt to disconnect and reconnect to XBDM."""
-    if not shell._conn.reconnect(10):
+    if not shell._bridge.reconnect(10):
         print("Failed to reconnect.")
     else:
         print("Connected")
@@ -78,7 +78,7 @@ def _cmd_send_raw(shell, args: [str]) -> Result:
     if len(args) > 1:
         body = bytes(" ".join(args[1:]), "utf-8")
     cmd = rdcp_command.RDCPCommand(args[0], body)
-    shell._conn.send_command(cmd)
+    shell._bridge.send_command(cmd)
 
     return Result.HANDLED
 
@@ -97,7 +97,7 @@ def _cmd_debugger_launch(shell, args: [str]) -> Result:
     else:
         command_line = None
 
-    debugger: Debugger = shell._debugger_context
+    debugger: Debugger = shell._debugger
     debugger.debug_xbe(args[0], command_line=command_line)
     return Result.HANDLED
 
@@ -106,7 +106,7 @@ def _cmd_debugger_attach(shell, _args: [str]) -> Result:
     """
 
     Attach debugger to the current process."""
-    if shell._debugger_context:
+    if shell._debugger:
         print("Already in debug mode.")
     else:
         _attach_debugger(shell)
@@ -117,11 +117,11 @@ def _cmd_debugger_restart(shell, _args: [str]) -> Result:
     """
 
     Restart the currently running XBE and breaks at the entrypoint."""
-    if not shell._debugger_context:
+    if not shell._debugger:
         print("ERROR: /attach debugger first.")
         return Result.HANDLED
 
-    debugger: Debugger = shell._debugger_context
+    debugger: Debugger = shell._debugger
     debugger.restart()
     return Result.HANDLED
 
@@ -131,12 +131,12 @@ def _cmd_debugger_set_active_thread(shell, args: [str]) -> Result:
 
     Set the active thread.
     """
-    if not shell._debugger_context:
+    if not shell._debugger:
         print("ERROR: /attach debugger first.")
         return Result.HANDLED
 
     thread_id = int(args[0], 0)
-    debugger: Debugger = shell._debugger_context
+    debugger: Debugger = shell._debugger
     debugger.set_active_thread(thread_id)
     return Result.HANDLED
 
@@ -145,11 +145,11 @@ def _cmd_debugger_step_instruction(shell, _args: [str]) -> Result:
     """
 
     Step one instruction in the current thread."""
-    if not shell._debugger_context:
+    if not shell._debugger:
         print("ERROR: /attach debugger first.")
         return Result.HANDLED
 
-    debugger: Debugger = shell._debugger_context
+    debugger: Debugger = shell._debugger
     debugger.step_instruction()
     return Result.HANDLED
 
@@ -158,11 +158,11 @@ def _cmd_debugger_step_function(shell, _args: [str]) -> Result:
     """
 
     Step one function call in the current thread."""
-    if not shell._debugger_context:
+    if not shell._debugger:
         print("ERROR: /attach debugger first.")
         return Result.HANDLED
 
-    debugger: Debugger = shell._debugger_context
+    debugger: Debugger = shell._debugger
     debugger.step_function()
     return Result.HANDLED
 
@@ -171,14 +171,14 @@ def _cmd_debugger_get_thread_info(shell, _args: [str]) -> Result:
     """
 
     Print basic information about all threads."""
-    if not shell._debugger_context:
+    if not shell._debugger:
         print("ERROR: /attach debugger first.")
         return Result.HANDLED
 
-    shell._debugger_context.refresh_thread_info()
+    shell._debugger.refresh_thread_info()
 
     thread_info: List[Thread] = sorted(
-        shell._debugger_context.threads, key=lambda x: x.thread_id
+        shell._debugger.threads, key=lambda x: x.thread_id
     )
     for thread in thread_info:
         print(thread)
@@ -290,17 +290,17 @@ def _cmd_debugger_get_all_thread_info(shell, _args: [str]) -> Result:
     """
 
     Prints all possible information about the active thread context."""
-    if not shell._debugger_context:
+    if not shell._debugger:
         print("ERROR: /attach debugger first.")
         return Result.HANDLED
 
-    thread: Thread = shell._debugger_context.active_thread
+    thread: Thread = shell._debugger.active_thread
     if not thread:
         print("/switch to a valid thread and stop first.")
         return Result.HANDLED
 
     thread.get_info()
-    context = shell._debugger_context.get_full_thread_context()
+    context = shell._debugger.get_full_thread_context()
 
     if thread.suspend_count:
         print(f"Suspended: count: {thread.suspend_count}")
@@ -313,23 +313,23 @@ def _cmd_debugger_get_all_thread_info(shell, _args: [str]) -> Result:
     print("Base address: 0x%08X" % thread.base_addr)
     print("Limit: 0x%08X" % thread.limit)
     print("Create timestamp: 0x%08X" % thread.create_time)
-    _print_thread_ext_context(shell._debugger_context.active_thread.thread_id, context)
+    _print_thread_ext_context(shell._debugger.active_thread.thread_id, context)
 
 
 def _cmd_debugger_getcontext(shell, _args: [str]) -> Result:
     """
 
     Print basic set of registers for the active thread context."""
-    if not shell._debugger_context:
+    if not shell._debugger:
         print("ERROR: /attach debugger first.")
         return Result.HANDLED
 
-    info: Optional[Thread.Context] = shell._debugger_context.get_thread_context()
+    info: Optional[Thread.Context] = shell._debugger.get_thread_context()
     if not info:
         print("/switch to a valid thread and stop first.")
         return Result.HANDLED
 
-    _print_thread_context(shell._debugger_context.active_thread.thread_id, info)
+    _print_thread_context(shell._debugger.active_thread.thread_id, info)
     return Result.HANDLED
 
 
@@ -337,11 +337,11 @@ def _cmd_debugger_getfullcontext(shell, _args: [str]) -> Result:
     """
 
     Print full set of registers for the active thread context."""
-    if not shell._debugger_context:
+    if not shell._debugger:
         print("ERROR: /attach debugger first.")
         return Result.HANDLED
 
-    info: Thread.FullContext = shell._debugger_context.get_full_thread_context()
+    info: Thread.FullContext = shell._debugger.get_full_thread_context()
     print(info)
 
     return Result.HANDLED
@@ -351,11 +351,11 @@ def _cmd_debugger_halt_all(shell, _args: [str]) -> Result:
     """
 
     Halts all threads in the debugger."""
-    if not shell._debugger_context:
+    if not shell._debugger:
         print("ERROR: /attach debugger first.")
         return Result.HANDLED
 
-    if not shell._debugger_context.halt():
+    if not shell._debugger.halt():
         print("Failed.")
 
     return Result.HANDLED
@@ -365,11 +365,11 @@ def _cmd_debugger_halt(shell, _args: [str]) -> Result:
     """
 
     Halts the active thread in the debugger."""
-    if not shell._debugger_context:
+    if not shell._debugger:
         print("ERROR: /attach debugger first.")
         return Result.HANDLED
 
-    thread: Optional[Thread] = shell._debugger_context.active_thread
+    thread: Optional[Thread] = shell._debugger.active_thread
     if not thread:
         print("/switch to a valid thread first.")
         return Result.HANDLED
@@ -387,7 +387,7 @@ def _cmd_debugger_continue_all(shell, args: [str]) -> Result:
 
     no_break_on_exceptions - if true, do not break on exceptions when continuing.
     """
-    if not shell._debugger_context:
+    if not shell._debugger:
         print("ERROR: /attach debugger first.")
         return Result.HANDLED
 
@@ -395,7 +395,7 @@ def _cmd_debugger_continue_all(shell, args: [str]) -> Result:
     if args:
         break_on_exceptions = not _boolean_value(args[0])
 
-    shell._debugger_context.continue_all(break_on_exceptions)
+    shell._debugger.continue_all(break_on_exceptions)
 
     return Result.HANDLED
 
@@ -407,11 +407,11 @@ def _cmd_debugger_continue(shell, args: [str]) -> Result:
 
     no_break_on_exceptions - if true, do not break on exceptions when continuing.
     """
-    if not shell._debugger_context:
+    if not shell._debugger:
         print("ERROR: /attach debugger first.")
         return Result.HANDLED
 
-    thread: Optional[Thread] = shell._debugger_context.active_thread
+    thread: Optional[Thread] = shell._debugger.active_thread
     if not thread:
         print("/switch to a valid thread first.")
         return Result.HANDLED
@@ -430,11 +430,11 @@ def _cmd_debugger_suspend(shell, _args: [str]) -> Result:
     """
 
     Suspends (or raises the suspend count on) the active thread."""
-    if not shell._debugger_context:
+    if not shell._debugger:
         print("ERROR: /attach debugger first.")
         return Result.HANDLED
 
-    thread: Optional[Thread] = shell._debugger_context.active_thread
+    thread: Optional[Thread] = shell._debugger.active_thread
     if not thread:
         print("/switch to a valid thread first.")
         return Result.HANDLED
@@ -449,11 +449,11 @@ def _cmd_debugger_resume(shell, _args: [str]) -> Result:
     """
 
     Resumes (or reduces the suspend count on) the active thread."""
-    if not shell._debugger_context:
+    if not shell._debugger:
         print("ERROR: /attach debugger first.")
         return Result.HANDLED
 
-    thread: Optional[Thread] = shell._debugger_context.active_thread
+    thread: Optional[Thread] = shell._debugger.active_thread
     if not thread:
         print("/switch to a valid thread first.")
         return Result.HANDLED
@@ -465,9 +465,8 @@ def _cmd_debugger_resume(shell, _args: [str]) -> Result:
 
 
 def _attach_debugger(shell):
-    if not shell._debugger_context:
-        shell._debugger_context = Debugger(shell._conn)
-        shell._debugger_context.attach()
+    if not shell._debugger:
+        shell._bridge.attach_debugger()
 
 
 DISPATCH_TABLE = {

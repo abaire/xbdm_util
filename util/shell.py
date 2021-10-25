@@ -25,8 +25,8 @@ def execute_command(command, command_args, bridge: XBDMBridge) -> int:
 
 
 class Shell:
-    def __init__(self, conn: XBDMBridge):
-        self._conn = conn
+    def __init__(self, bridge: XBDMBridge):
+        self._bridge: XBDMBridge = bridge
         self._debugger_context: Optional[Debugger] = None
 
     def run(self):
@@ -71,11 +71,11 @@ class Shell:
                             )
 
                         if cmd:
-                            self._conn.send_command(cmd)
+                            self._bridge.send_command(cmd)
 
                         # Hack: Wait for a graceful close and exit.
                         if command == "bye":
-                            self._conn.await_empty_queue()
+                            self._bridge.await_empty_queue()
                             return
 
                 except IndexError:
@@ -84,13 +84,20 @@ class Shell:
                     print(f"Incorrect type.\n{e}")
                 except ConnectionResetError:
                     print("Connection closed by XBOX")
-                    if not self._conn.reconnect():
+                    if not self._bridge.reconnect():
                         print("Failed to reconnect")
                         break
 
-                self._conn.await_empty_queue()
+                self._bridge.await_empty_queue()
 
             self._print_prompt()
+
+    def attach_debugger(self) -> Debugger:
+        if self._debugger_context:
+            return self._debugger_context
+
+        self._debugger_context = Debugger(self._bridge)
+        self._debugger_context.attach()
 
     def _handle_notifyat(
         self, address: Optional[str], port: int, is_drop: bool, is_debug: bool
@@ -104,7 +111,7 @@ class Shell:
             return
 
         logger.info(f"Starting notifyat listener at {port}")
-        self._conn.create_notification_listener(port)
+        self._bridge.create_notification_listener(port)
 
     def _print_prompt(self) -> None:
         if self._debugger_context:

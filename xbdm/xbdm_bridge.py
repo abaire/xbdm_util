@@ -10,11 +10,11 @@ from typing import Callable
 from typing import Optional
 from typing import Tuple
 
+from . import rdcp_command
 from . import xbdm_bridge_remote_server
 from . import xbdm_notification_server
-from . import rdcp_command
-from net import ip_transport
 from . import xbdm_transport
+from net import ip_transport
 
 SELECT_TIMEOUT_SECS = 0.25
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ class XBDMBridge:
         xbox_addr: Tuple[str, int],
         remote_connected_handler: Optional[
             Callable[
-                [xbdm_transport.XBDMTransport, socket.socket, Tuple[str, int]],
+                [XBDMBridge, socket.socket, Tuple[str, int]],
                 Optional[ip_transport.IPTransport],
             ]
         ] = None,
@@ -151,7 +151,7 @@ class XBDMBridge:
                 transport, xbdm_notification_server.XBDMNotificationServer
             ):
                 continue
-            if not transport.addr[1] == port:
+            if transport.addr[1] != port:
                 continue
 
             transport.close()
@@ -205,7 +205,7 @@ class XBDMBridge:
         self, remote: socket.socket, remote_addr: Tuple[str, int]
     ) -> Optional[ip_transport.IPTransport]:
         transport: Optional[ip_transport.IPTransport] = self._remote_connected_handler(
-            self._xbdm, remote, remote_addr
+            self, remote, remote_addr
         )
         if not transport:
             logger.debug(f"Denied bridge request from {remote_addr}")

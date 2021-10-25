@@ -2,9 +2,13 @@
 from __future__ import annotations
 
 import logging
+import select
 import socket
+import threading
+import time
 from typing import Callable
 from typing import Optional
+from typing import Set
 from typing import Tuple
 
 from net import ip_transport
@@ -14,6 +18,8 @@ logger = logging.getLogger(__name__)
 
 class XBDMBridgeRemoteServer(ip_transport.IPTransport):
     """Creates a listener that will accept IPTransport connections for bridging."""
+
+    THREAD_SLEEP_SECS = 0.100
 
     def __init__(
         self,
@@ -31,6 +37,18 @@ class XBDMBridgeRemoteServer(ip_transport.IPTransport):
         self.xbdm_info = xbdm_info
         self.addr = self._sock.getsockname()
         self.name = f"{self.__class__.__name__}@{self.addr[1]} => {self.xbdm_info}"
+
+        self._client_lock = threading.RLock()
+        self._new_clients = set()
+        self._clients = set()
+
+        # Clients are executed in a subthread to allow them to block on the XBDM
+        # connection without deadlocking.
+        self._running = True
+        self._client_thread = threading.Thread(
+            target=self._thread_main, name="XBDMBridgeClients"
+        )
+        self._client_thread.start()
 
     def process(
         self,
@@ -60,7 +78,8 @@ class XBDMBridgeRemoteServer(ip_transport.IPTransport):
                 remote.close()
                 return True
 
-            self._add_sub_connection(transport)
+            with self._client_lock:
+                self._new_clients.add(transport)
             logger.debug(
                 f"Accepted bridge channel to {self.xbdm_info} from {remote_addr}"
             )
@@ -68,4 +87,58 @@ class XBDMBridgeRemoteServer(ip_transport.IPTransport):
         return True
 
     def close(self):
+        self._running = False
+        self._client_thread.join()
+
+        for client in self._new_clients:
+            client.close()
+        for client in self._clients:
+            client.close()
+
         super().close()
+
+        self._new_clients.clear()
+        self._clients.clear()
+
+    def _thread_main(self):
+        """Processes data from any connected bridge clients."""
+        while self._running:
+            with self._client_lock:
+                new_clients: Set[ip_transport.IPTransport] = self._new_clients
+                clients: Set[ip_transport.IPTransport] = self._clients
+
+            # Start any new clients
+            self._process_new_clients(new_clients)
+            self._process_clients(clients)
+
+    def _process_new_clients(self, new_clients: Set[ip_transport.IPTransport]):
+        for new_client in new_clients:
+            new_client.start()
+
+        with self._client_lock:
+            self._clients.update(new_clients)
+            self._new_clients.clear()
+
+    def _process_clients(self, clients: Set[ip_transport.IPTransport]):
+        if not clients:
+            time.sleep(self.THREAD_SLEEP_SECS)
+            return
+
+        readable = []
+        writable = []
+        exceptional = []
+
+        for client in clients:
+            client.select(readable, writable, exceptional)
+
+        readable, writable, exceptional = select.select(
+            readable, writable, exceptional, self.THREAD_SLEEP_SECS
+        )
+
+        closed_channels = set()
+        for connection in clients:
+            if not connection.process(readable, writable, exceptional):
+                closed_channels.add(connection)
+
+        with self._client_lock:
+            self._clients -= closed_channels

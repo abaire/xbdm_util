@@ -43,6 +43,10 @@ class IPTransport:
         self._sock = sock
         self.addr = addr
 
+    def start(self):
+        """Perform transport-specific one-time startup."""
+        pass
+
     def close(self):
         if not self._sock:
             return
@@ -50,9 +54,10 @@ class IPTransport:
             logger.info(f"Closing connection {self.name} to {self.addr}")
         else:
             logger.info(f"Closing connection to {self.addr}")
+
+        self._sock.shutdown(socket.SHUT_RDWR)
         self._sock.close()
         self._sock = None
-        self.addr = None
         self._read_buffer.clear()
         self._write_buffer.clear()
 

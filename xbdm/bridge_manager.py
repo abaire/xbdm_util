@@ -25,7 +25,7 @@ class BridgeManager:
         xbox_addr: Tuple[str, int],
         remote_connected_handler: Optional[
             Callable[
-                [xbdm_transport.XBDMTransport, socket.socket, Tuple[str, int]],
+                [xbdm_bridge.XBDMBridge, socket.socket, Tuple[str, int]],
                 Optional[ip_transport.IPTransport],
             ]
         ] = None,
