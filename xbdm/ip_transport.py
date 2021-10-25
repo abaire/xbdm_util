@@ -116,7 +116,7 @@ class IPTransport:
                 self.close()
                 return False
 
-            self._read_buffer.extend(data)
+            self._recv(data)
             if self._on_bytes_read:
                 self._on_bytes_read(self)
 
@@ -125,6 +125,9 @@ class IPTransport:
             self._write_buffer = self._write_buffer[bytes_sent:]
 
         return True
+
+    def _recv(self, data: bytes):
+        self._read_buffer.extend(data)
 
     def _select_sub_connections(
         self,

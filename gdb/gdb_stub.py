@@ -1,4 +1,9 @@
-"""See https://sourceware.org/gdb/onlinedocs/gdb/Remote-Protocol.html"""
+"""Provides a GDB<->XBDM bridge.
+
+See https://sourceware.org/gdb/onlinedocs/gdb/Remote-Protocol.html
+See https://www.embecosm.com/appnotes/ean4/embecosm-howto-rsp-server-ean4-issue-2.html
+"""
+
 from __future__ import annotations
 
 import collections
@@ -18,7 +23,9 @@ logger = logging.getLogger(__name__)
 
 
 class GDBTransport(ip_transport.IPTransport):
-    """GDB Stub translation of XDBM functions."""
+    """GDB Remote Serial Protocol translation of XDBM functions."""
+
+    _RSP_ESCAPE_CHAR = ord("}")
 
     def __init__(self, xbdm: xbdm_transport.XBDMTransport):
         super().__init__(process_callback=self._on_bytes_read)
@@ -45,6 +52,34 @@ class GDBTransport(ip_transport.IPTransport):
         logger.debug(f"Sending GDB packet: {data.decode('utf-8')}")
         self.send(data)
 
+    def _recv(self, data: bytes):
+        # RSP uses '}' as an escape character. Escapes are processed in this method
+        # before adding to the read buffer to simplify parsing.
+
+        if not data:
+            return
+
+        # Process any left over escapes.
+        if self._read_buffer and self._read_buffer[-1] == self._RSP_ESCAPE_CHAR:
+            self._read_buffer[-1] = data[0] ^ 0x20
+            data = data[1:]
+
+        escape_char_index = data.find(self._RSP_ESCAPE_CHAR)
+        while escape_char_index >= 0:
+            if escape_char_index == len(data):
+                # If there are no more characters after the escape char, just add it to the buffer and let it be
+                # processed when more data is received.
+                break
+
+            if escape_char_index:
+                self._read_buffer.extend(data[: escape_char_index - 1])
+
+            unescaped = data[escape_char_index + 1] ^ 0x20
+            self._read_buffer.append(unescaped)
+            data = data[escape_char_index + 2 :]
+
+        self._read_buffer.extend(data)
+
     def _on_bytes_read(self, _ignored):
         p = packet.GDBPacket()
 
@@ -53,6 +88,10 @@ class GDBTransport(ip_transport.IPTransport):
                 self.shift_read_buffer(1)
             elif self.read_buffer[0] == b"-":
                 # TODO: Handle - acks.
+                self.shift_read_buffer(1)
+            elif self.read_buffer[0] == 0x03:
+                # TODO: Handle interrupt requests.
+                assert False
                 self.shift_read_buffer(1)
 
             bytes_consumed = p.parse(self.read_buffer)
@@ -77,6 +116,10 @@ class GDBTransport(ip_transport.IPTransport):
 
         if p.data == "QStartNoAckMode":
             self._handle_QStartNoAckMode(p)
+            return
+
+        if p.data == "qTStatus":
+            self._handle_query_trace_status(p)
             return
 
         logger.warning(f"Unsupported GDB packet {p}")
@@ -138,6 +181,9 @@ class GDBTransport(ip_transport.IPTransport):
     def _handle_QStartNoAckMode(self, _p: packet.GDBPacket):
         self.features["QStartNoAckMode+"] = True
         self.send_packet(packet.GDBPacket("OK"))
+
+    def _handle_query_trace_status(self, _p: packet.GDBPacket):
+        self.send_packet(packet.GDBPacket(""))
 
 
 def _handle_build_command(
