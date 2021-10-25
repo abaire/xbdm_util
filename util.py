@@ -71,9 +71,6 @@ def _run_bridge(
 def main(args):
     log_level = logging.DEBUG if args.verbose else logging.INFO
 
-    def fmt():
-        return "%(levelname)-8s [%(filename)s:%(lineno)d] %(message)s"
-
     logging.basicConfig(level=log_level)
     if args.color:
         ansi_formatter.colorize_logs()
