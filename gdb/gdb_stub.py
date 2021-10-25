@@ -136,9 +136,9 @@ class GDBTransport(ip_transport.IPTransport):
             self.shift_read_buffer(bytes_consumed)
 
             logger.debug(f"Processed packet {pkt}")
-            logger.debug(
-                f"After processing: [{len(self._read_buffer)}] {self._read_buffer.hex()}"
-            )
+            # logger.debug(
+            #     f"After processing: [{len(self._read_buffer)}] {self._read_buffer.hex()}"
+            # )
 
             if pkt.checksum_ok:
                 if not self.features["QStartNoAckMode"]:
