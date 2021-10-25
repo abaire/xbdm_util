@@ -3,6 +3,7 @@ import binascii
 import enum
 import ipaddress
 import logging
+import signal
 from typing import Callable
 from typing import Dict
 from typing import Mapping
@@ -1306,8 +1307,11 @@ class IsStopped(ProcessedCommand):
     """Checks to see if the given thread is stopped."""
 
     class StopReason:
-        def __init__(self, reason: str, info_items: Optional[Dict[str, str]] = None):
+        def __init__(
+            self, reason: str, signal: int, info_items: Optional[Dict[str, str]] = None
+        ):
             self.reason = reason
+            self.signal = signal
             self.info_items = info_items
 
         def __str__(self):
@@ -1320,17 +1324,21 @@ class IsStopped(ProcessedCommand):
 
     class Unknown(StopReason):
         def __init__(self):
-            super().__init__("unknown reason")
+            super().__init__("unknown reason", signal.SIGTRAP)
 
     class Debugstr(StopReason):
         def __init__(self, entries: Dict[bytes, bytes]):
             self.thread_id = rdcp_response.get_int_property(entries, b"thread")
-            super().__init__("debugstr", {"thread": "%d" % self.thread_id})
+            super().__init__(
+                "debugstr", signal.SIGTRAP, {"thread": "%d" % self.thread_id}
+            )
 
     class Assertion(StopReason):
         def __init__(self, entries: Dict[bytes, bytes]):
             self.thread_id = rdcp_response.get_int_property(entries, b"thread")
-            super().__init__("assert prompt", {"thread": "%d" % self.thread_id})
+            super().__init__(
+                "assert prompt", signal.SIGTRAP, {"thread": "%d" % self.thread_id}
+            )
 
     class Breakpoint(StopReason):
         def __init__(self, entries: Dict[bytes, bytes]):
@@ -1338,6 +1346,7 @@ class IsStopped(ProcessedCommand):
             self.address: int = rdcp_response.get_int_property(entries, b"addr")
             super().__init__(
                 "breakpoint",
+                signal.SIGTRAP,
                 {
                     "thread": "%d" % self.thread_id,
                     "address": "0x%08X" % self.address,
@@ -1350,6 +1359,7 @@ class IsStopped(ProcessedCommand):
             self.address: int = rdcp_response.get_int_property(entries, b"addr")
             super().__init__(
                 "single step",
+                signal.SIGTRAP,
                 {
                     "thread": "%d" % self.thread_id,
                     "address": "0x%08X" % self.address,
@@ -1381,6 +1391,7 @@ class IsStopped(ProcessedCommand):
 
             super().__init__(
                 "data breakpoint",
+                signal.SIGTRAP,
                 {
                     "thread": "%d" % self.thread_id,
                     "address": "0x%08X" % self.address,
@@ -1400,7 +1411,9 @@ class IsStopped(ProcessedCommand):
             states = ["stopped", "started", "rebooting", "pending"]
             self.state = states.index(info)
             super().__init__(
-                "execution state changed", {"new_state": self.state_string}
+                "execution state changed",
+                signal.SIGTRAP,
+                {"new_state": self.state_string},
             )
 
     class Exception(StopReason):
@@ -1467,7 +1480,7 @@ class IsStopped(ProcessedCommand):
                 attributes["nparam"] = "%d" % self.num_param
                 attributes["params"] = "0x%08X" % self.params
 
-            super().__init__("exception", attributes)
+            super().__init__("exception", signal.SIGTRAP, attributes)
 
     class CreateThread(StopReason):
         def __init__(self, entries: Dict[bytes, bytes]):
@@ -1475,6 +1488,7 @@ class IsStopped(ProcessedCommand):
             self.start: int = rdcp_response.get_int_property(entries, b"start")
             super().__init__(
                 "create thread",
+                signal.SIGTRAP,
                 {
                     "thread": "%d" % self.thread_id,
                     "start_address": "0x%08X" % self.start,
@@ -1484,7 +1498,9 @@ class IsStopped(ProcessedCommand):
     class TerminateThread(StopReason):
         def __init__(self, entries: Dict[bytes, bytes]):
             self.thread_id: int = rdcp_response.get_int_property(entries, b"thread")
-            super().__init__("terminate thread", {"thread": "%d" % self.thread_id})
+            super().__init__(
+                "terminate thread", signal.SIGTRAP, {"thread": "%d" % self.thread_id}
+            )
 
     class ModuleLoad(StopReason):
         def __init__(self, entries: Dict[bytes, bytes]):
@@ -1508,7 +1524,7 @@ class IsStopped(ProcessedCommand):
             if self.xbe:
                 attributes["is_xbe"] = "true"
 
-            super().__init__("module load", attributes)
+            super().__init__("module load", signal.SIGTRAP, attributes)
 
     class _SectionAction(StopReason):
         def __init__(self, action: str, entries: Dict[bytes, bytes]):
@@ -1525,7 +1541,7 @@ class IsStopped(ProcessedCommand):
                 "index": "%d" % self.index,
                 "flags": "%d" % self.flags,
             }
-            super().__init__(action, attributes)
+            super().__init__(action, signal.SIGTRAP, attributes)
 
     class SectionLoad(_SectionAction):
         def __init__(self, entries: Dict[bytes, bytes]):
@@ -1546,7 +1562,7 @@ class IsStopped(ProcessedCommand):
 
             if self.message:
                 attributes["message"] = self.message
-            super().__init__(action, attributes)
+            super().__init__(action, signal.SIGABRT, attributes)
 
     class RIP(_RIPBase):
         def __init__(self, entries: Dict[bytes, bytes]):

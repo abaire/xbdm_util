@@ -53,6 +53,12 @@ class GDBTransport(ip_transport.IPTransport):
         self._debugger.attach()
         self._debugger.halt()
 
+        thread = self._debugger.active_thread
+        if not thread:
+            return
+
+        self._send_thread_stop_packet(thread)
+
     def close(self):
         if self._debugger:
             self._debugger.shutdown()
@@ -211,8 +217,12 @@ class GDBTransport(ip_transport.IPTransport):
         self.send_packet(GDBPacket())
 
     def _handle_query_halt_reason(self, pkt: GDBPacket):
-        logger.error(f"Unsupported packet {pkt.data}")
-        self.send_packet(GDBPacket())
+        thread = self._debugger.active_thread
+        if not thread or not thread.fetch_stop_reason():
+            logger.error("Halt query issued but target is not halted.")
+            self.send_packet(GDBPacket())
+            return
+        self._send_thread_stop_packet(thread)
 
     def _handle_argv(self, pkt: GDBPacket):
         logger.error(f"Unsupported packet {pkt.data}")
@@ -464,6 +474,17 @@ class GDBTransport(ip_transport.IPTransport):
 
     def _send_empty(self):
         self.send_packet(GDBPacket())
+
+    def _send_thread_stop_packet(self, thread: debugger.Thread):
+        halt_signal = thread.last_stop_reason_signal
+        if not halt_signal:
+            return False
+
+        # TODO: send detailed information.
+        # see https://sourceware.org/gdb/onlinedocs/gdb/Stop-Reply-Packets.html#Stop-Reply-Packets
+        self.send_packet(GDBPacket("T%02xthread:%x;" % (halt_signal, thread.thread_id)))
+
+        return True
 
     def _start_no_ack_mode(self):
         self.features["QStartNoAckMode+"] = True

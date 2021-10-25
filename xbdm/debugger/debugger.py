@@ -139,6 +139,13 @@ class Thread(_XBDMClient):
         ]
         return "\n".join(lines)
 
+    @property
+    def last_stop_reason_signal(self) -> int:
+        """Returns a signal number representing the reason this thread was last stopped."""
+        if not self.last_stop_reason:
+            return 0
+        return self.last_stop_reason.signal
+
     def get_info(self):
         response = self._call(rdcp_command.ThreadInfo(self.thread_id))
         assert response.ok
@@ -244,7 +251,7 @@ class Thread(_XBDMClient):
     #     while self.suspend_count > 0:
     #         self._connection.send_command(rdcp_command.Continue(self.thread_id))
 
-    def is_stopped(self) -> bool:
+    def fetch_stop_reason(self) -> bool:
         response = self._call(rdcp_command.IsStopped(self.thread_id))
         if not response:
             return False
@@ -567,10 +574,10 @@ class Debugger(_XBDMClient):
         # Switch context to the most appropriate stopped thread, if one exists.
         thread = self.active_thread
         if thread:
-            thread.is_stopped()
+            thread.fetch_stop_reason()
         else:
             for thr in self.threads:
-                if not thr.is_stopped():
+                if not thr.fetch_stop_reason():
                     continue
                 if thr.last_stop_reason:
                     self.set_active_thread(thr.thread_id)
@@ -589,7 +596,7 @@ class Debugger(_XBDMClient):
                 time.sleep(wait_per_loop)
                 time_waited += wait_per_loop
 
-            if time_waited >= timeout_seconds and not thread.is_stopped():
+            if time_waited >= timeout_seconds and not thread.fetch_stop_reason():
                 logger.warning("Halt failed to result in a state update.")
                 return False
 
