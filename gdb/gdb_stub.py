@@ -35,7 +35,7 @@ class GDBTransport(ip_transport.IPTransport):
     def __init__(self, bridge: xbdm_bridge.XBDMBridge, name: str):
         super().__init__(process_callback=self._on_bytes_read, name=name)
         self._bridge: xbdm_bridge.XBDMBridge = bridge
-
+        self._debugger: Optional[debugger.Debugger] = None
         self._send_queue = collections.deque()
 
         # Maps a command type to the thread id that should be used when interpreting that command.
@@ -51,6 +51,7 @@ class GDBTransport(ip_transport.IPTransport):
     def start(self):
         self._debugger = debugger.Debugger(self._bridge)
         self._debugger.attach()
+        self._debugger.halt()
 
     def close(self):
         if self._debugger:
@@ -311,9 +312,12 @@ class GDBTransport(ip_transport.IPTransport):
             self._handle_thread_info_continue()
             return
 
-        # if p.data == "qTStatus":
-        #     self._handle_query_trace_status(p)
-        #     return
+        if query == "TStatus":
+            self._handle_query_trace_status()
+            return
+
+        if query == "C":
+            self._handle_query_current_thread_id()
 
         logger.error(f"Unsupported query read packet {pkt.data}")
         self.send_packet(GDBPacket())
@@ -348,7 +352,7 @@ class GDBTransport(ip_transport.IPTransport):
 
     def _handle_extended_v_command(self, pkt: GDBPacket):
         if pkt.data == "vMustReplyEmpty":
-            self.send_packet(GDBPacket())
+            self._send_empty()
             return
 
         logger.error(f"Unsupported v packet {pkt.data}")
@@ -445,6 +449,21 @@ class GDBTransport(ip_transport.IPTransport):
             return
 
         self.send_packet(GDBPacket("m%x" % self._thread_info_buffer.pop()))
+
+    def _handle_query_trace_status(self):
+        # TODO: Actually support trace experiments.
+        # GDBPacket("T0")
+        self._send_empty()
+
+    def _handle_query_current_thread_id(self):
+        thread = self._debugger.active_thread
+        if not thread:
+            self._send_empty()
+
+        self.send_packet(GDBPacket("QC%x" % thread.thread_id))
+
+    def _send_empty(self):
+        self.send_packet(GDBPacket())
 
     def _start_no_ack_mode(self):
         self.features["QStartNoAckMode+"] = True
