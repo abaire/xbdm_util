@@ -121,6 +121,7 @@ class Thread(_XBDMClient):
         self.get_info()
 
         self.last_known_address: Optional[int] = None
+        self.last_stop_reason: Optional[rdcp_command.IsStopped.StopReason]
 
     def __str__(self) -> str:
         lines = [
@@ -242,6 +243,17 @@ class Thread(_XBDMClient):
     #     self.get_info()
     #     while self.suspend_count > 0:
     #         self._connection.send_command(rdcp_command.Continue(self.thread_id))
+
+    def is_stopped(self) -> bool:
+        response = self._call(rdcp_command.IsStopped(self.thread_id))
+        if not response:
+            return False
+
+        if not response.stopped:
+            self.last_stop_reason = None
+        else:
+            self.last_stop_reason = response.reason
+        return True
 
 
 def _match_hex(key: str) -> str:
@@ -540,12 +552,48 @@ class Debugger(_XBDMClient):
         return thread.get_full_context()
 
     def halt(self, timeout_seconds=0.250) -> bool:
-        """Halts all running threads."""
+        """Halts all running threads and waits for break response."""
+
+        self._last_xbdm_execution_state = None
         response = self._call(rdcp_command.Halt())
         if not response.ok:
             return False
 
-        return response.ok
+        if not self.threads:
+            # This should never happen as the call to Halt() should fail.
+            logger.warning("Halt called on an instance with no threads!")
+            return True
+
+        # Switch context to the most appropriate stopped thread, if one exists.
+        thread = self.active_thread
+        if thread:
+            thread.is_stopped()
+        else:
+            for thr in self.threads:
+                if not thr.is_stopped():
+                    continue
+                if thr.last_stop_reason:
+                    self.set_active_thread(thr.thread_id)
+                    thread = thr
+                    break
+        if not thread:
+            # Just switch to the first thread.
+            self.set_active_thread(self._threads[0].thread_id)
+
+        time_waited = 0
+        if timeout_seconds and thread.last_stop_reason is None:
+            wait_per_loop = 0.005
+            while time_waited < timeout_seconds:
+                if self._last_xbdm_execution_state:
+                    break
+                time.sleep(wait_per_loop)
+                time_waited += wait_per_loop
+
+            if time_waited >= timeout_seconds and not thread.is_stopped():
+                logger.warning("Halt failed to result in a state update.")
+                return False
+
+        return thread.last_stop_reason is not None
 
     def continue_all(self, break_on_exceptions: bool = True):
         """Continues all threads."""
