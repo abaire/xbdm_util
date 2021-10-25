@@ -1,5 +1,4 @@
-import binascii
-import struct
+from typing import Dict
 from typing import Optional
 
 
@@ -9,6 +8,16 @@ class GDBPacket:
 
     PACKET_TRAILER_STR = "#"
     PACKET_TRAILER = bytes(PACKET_TRAILER_STR, "utf-8")
+
+    RSP_ESCAPE_CHAR_STR = "}"
+    RSP_ESCAPE_CHAR = ord(RSP_ESCAPE_CHAR_STR)
+
+    # RSP escape sequence look up table.
+    _ESCAPE_MAP: Dict[str, str] = {
+        RSP_ESCAPE_CHAR_STR: RSP_ESCAPE_CHAR_STR + chr(RSP_ESCAPE_CHAR ^ 0x20),
+        PACKET_LEADER_STR: RSP_ESCAPE_CHAR_STR + chr(PACKET_LEADER[0] ^ 0x20),
+        PACKET_TRAILER_STR: RSP_ESCAPE_CHAR_STR + chr(PACKET_TRAILER[0] ^ 0x20),
+    }
 
     def __init__(self, data: Optional[str] = None):
         self.data: Optional[str] = data
@@ -50,11 +59,16 @@ class GDBPacket:
         return terminator + 2
 
     def serialize(self) -> bytes:
+
+        escaped_data = self.data or ""
+        for key, value in self._ESCAPE_MAP.items():
+            escaped_data = escaped_data.replace(key, value)
+
         return bytes(
             "%s%s%s%02x"
             % (
                 self.PACKET_LEADER_STR,
-                self.data or "",
+                escaped_data,
                 self.PACKET_TRAILER_STR,
                 self.checksum,
             ),

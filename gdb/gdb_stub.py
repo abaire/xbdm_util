@@ -25,8 +25,6 @@ logger = logging.getLogger(__name__)
 class GDBTransport(ip_transport.IPTransport):
     """GDB Remote Serial Protocol translation of XDBM functions."""
 
-    _RSP_ESCAPE_CHAR = ord("}")
-
     def __init__(self, xbdm: xbdm_transport.XBDMTransport):
         super().__init__(process_callback=self._on_bytes_read)
         self._xbdm = xbdm
@@ -47,7 +45,7 @@ class GDBTransport(ip_transport.IPTransport):
         if not self._send_queue:
             return
 
-        p = self._send_queue.popleft()
+        p: packet.GDBPacket = self._send_queue.popleft()
         data = p.serialize()
         logger.debug(f"Sending GDB packet: {data.decode('utf-8')}")
         self.send(data)
@@ -60,11 +58,14 @@ class GDBTransport(ip_transport.IPTransport):
             return
 
         # Process any left over escapes.
-        if self._read_buffer and self._read_buffer[-1] == self._RSP_ESCAPE_CHAR:
+        if (
+            self._read_buffer
+            and self._read_buffer[-1] == packet.GDBPacket.RSP_ESCAPE_CHAR
+        ):
             self._read_buffer[-1] = data[0] ^ 0x20
             data = data[1:]
 
-        escape_char_index = data.find(self._RSP_ESCAPE_CHAR)
+        escape_char_index = data.find(packet.GDBPacket.RSP_ESCAPE_CHAR)
         while escape_char_index >= 0:
             if escape_char_index == len(data):
                 # If there are no more characters after the escape char, just add it to the buffer and let it be
