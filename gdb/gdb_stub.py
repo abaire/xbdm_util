@@ -17,6 +17,7 @@ from typing import Optional
 from typing import Tuple
 
 from .packet import GDBPacket
+from .packet import GDBBinaryPacket
 from net import ip_transport
 from xbdm import debugger
 from xbdm import xbdm_bridge
@@ -31,6 +32,8 @@ class GDBTransport(ip_transport.IPTransport):
     TID_ALL_THREADS = -1
     # Indicates that a request should apply to any arbitrary thread.
     TID_ANY_THREAD = 0
+
+    ERR_RETRIEVAL_FAILED = 0xD0
 
     def __init__(self, bridge: xbdm_bridge.XBDMBridge, name: str):
         super().__init__(process_callback=self._on_bytes_read, name=name)
@@ -188,8 +191,8 @@ class GDBTransport(ip_transport.IPTransport):
             "d": target._handle_deprecated_command,
             "D": target._handle_detach,
             "F": target._handle_file_io,
-            "g": target._handle_read_general_register,
-            "G": target._handle_write_general_register,
+            "g": target._handle_read_general_registers,
+            "G": target._handle_write_general_registers,
             "H": target._handle_select_thread_for_command_group,
             "i": target._handle_step_instruction,
             "I": target._handle_signal_step,
@@ -256,11 +259,30 @@ class GDBTransport(ip_transport.IPTransport):
         logger.error(f"Unsupported packet {pkt.data}")
         self.send_packet(GDBPacket())
 
-    def _handle_read_general_register(self, pkt: GDBPacket):
+    def _handle_read_general_registers(self, pkt: GDBPacket):
+        thread_id = self._command_thread_id_context.get("g", None)
+        if thread_id is None:
+            logger.warning("Received 'g' command but no thread set! Treating as ANY.")
+            thread_id = self.TID_ANY_THREAD
+
+        if thread_id == self.TID_ALL_THREADS:
+            logger.error(f"Unsupported 'g' query for all threads.")
+            self._send_empty()
+            return
+
+        if thread_id == self.TID_ANY_THREAD:
+            thread_id = self._debugger.any_thread_id
+
+        thread = self._debugger.get_thread(thread_id)
+
+        context = thread.get_context()
+        if not context:
+            self._send_error(self.ERR_RETRIEVAL_FAILED)
+
         logger.error(f"Unsupported packet {pkt.data}")
         self.send_packet(GDBPacket())
 
-    def _handle_write_general_register(self, pkt: GDBPacket):
+    def _handle_write_general_registers(self, pkt: GDBPacket):
         logger.error(f"Unsupported packet {pkt.data}")
         self.send_packet(GDBPacket())
 
@@ -328,6 +350,11 @@ class GDBTransport(ip_transport.IPTransport):
 
         if query == "C":
             self._handle_query_current_thread_id()
+            return
+
+        if query.startswith("Xfer:features:read:"):
+            self._handle_features_read(pkt)
+            return
 
         logger.error(f"Unsupported query read packet {pkt.data}")
         self.send_packet(GDBPacket())
@@ -429,10 +456,15 @@ class GDBTransport(ip_transport.IPTransport):
                 response.append("no-resumed-")
                 continue
             if feature == "xmlRegisters=i386":
-                self.features["xmlRegisters"] = "i386"
+                # Registers are provided via qXfer:features
                 continue
 
+        # Disable acks.
         response.append("QStartNoAckMode+")
+
+        # Instruct GDB to ask us for CPU features since only a subset of i386
+        # information is retrievable from XBDM.
+        response.append("qXfer:features:read+")
 
         pkt = GDBPacket(";".join(response))
         self.send_packet(pkt)
@@ -472,8 +504,26 @@ class GDBTransport(ip_transport.IPTransport):
 
         self.send_packet(GDBPacket("QC%x" % thread.thread_id))
 
+    def _handle_features_read(self, pkt: GDBPacket):
+        target_file, region = pkt.data[pkt.data.index("read:") + 5 :].split(":")
+        start, end = region.split(",")
+        start = int(start, 16)
+        end = int(end, 16)
+
+        logger.debug(f"Read requested from {target_file} {start} - {end}")
+
+        body = b"test"
+        self._send_xfer_response(body, True)
+
+    def _send_xfer_response(self, body: bytes, is_end_of_file: bool):
+        prefix = b"l" if is_end_of_file else b"m"
+        self.send_packet(GDBBinaryPacket(prefix + body))
+
     def _send_empty(self):
         self.send_packet(GDBPacket())
+
+    def _send_error(self, error_number: int):
+        self.send_packet(GDBPacket("E%02X" % error_number))
 
     def _send_thread_stop_packet(self, thread: debugger.Thread):
         halt_signal = thread.last_stop_reason_signal

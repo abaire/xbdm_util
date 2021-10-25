@@ -409,6 +409,18 @@ class Debugger(_XBDMClient):
         return self._threads.get(self._active_thread_id)
 
     @property
+    def any_thread_id(self) -> int:
+        """Returns the thread ID of any valid thread (preferring the active context)."""
+        if not self._threads:
+            return 0
+
+        thread = self.active_thread
+        if thread:
+            return thread.thread_id
+
+        return self._threads[0].thread_id
+
+    @property
     def short_state_info(self) -> str:
         """Returns a short string indicating the current execution state."""
         items = []
@@ -428,6 +440,9 @@ class Debugger(_XBDMClient):
     @property
     def sections(self) -> Dict[int, Section]:
         return self._section_table
+
+    def get_thread(self, thread_id: int) -> Optional[Thread]:
+        return self._threads.get(thread_id)
 
     def shutdown(self):
         if self._debug_port:

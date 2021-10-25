@@ -1,8 +1,21 @@
 from typing import Dict
 from typing import Optional
+from typing import Union
+
+
+def _mod_256_checksum(data: bytes) -> int:
+    if not data:
+        return 0
+
+    checksum = 0
+    for byte in data:
+        checksum = (checksum + byte) & 0xFF
+    return checksum
 
 
 class GDBPacket:
+    """Models a single GDB RSP data packet."""
+
     PACKET_LEADER_STR = "$"
     PACKET_LEADER = bytes(PACKET_LEADER_STR, "utf-8")
 
@@ -33,12 +46,11 @@ class GDBPacket:
         return ret
 
     def _calculate_checksum(self):
-        self.checksum = 0
         if not self.data:
+            self.checksum = 0
             return
 
-        for byte in self.data.encode("utf-8"):
-            self.checksum = (self.checksum + byte) & 0xFF
+        self.checksum = _mod_256_checksum(self.data.encode("utf=-8"))
 
     def parse(self, buffer: bytes) -> int:
         leader = buffer.find(self.PACKET_LEADER)
@@ -59,7 +71,9 @@ class GDBPacket:
         return terminator + 3
 
     def serialize(self) -> bytes:
+        return self._serialize()
 
+    def _serialize(self) -> bytes:
         escaped_data = self.data or ""
         for key, value in self._ESCAPE_MAP.items():
             escaped_data = escaped_data.replace(key, value)
@@ -74,3 +88,30 @@ class GDBPacket:
             ),
             "utf-8",
         )
+
+
+class GDBBinaryPacket(GDBPacket):
+    """Models a single GDB RSP data packet with a binary message."""
+
+    def __init__(self, binary_data: Union[bytes, bytearray]):
+        super().__init__()
+        self._binary_data = binary_data
+        self.checksum = _mod_256_checksum(self._binary_data)
+        self.checksum_ok = True
+
+    def __str__(self):
+        ret = f"{self.__class__.__name__}"
+        if self.data:
+            ret += f" <checksum: {'ok' if self.checksum_ok else 'bad'}> {self._binary_data.hex()}"
+
+        return ret
+
+    def _serialize(self) -> bytes:
+        escaped_data = self._binary_data
+        for key, value in self._ESCAPE_MAP.items():
+            escaped_data = escaped_data.replace(
+                bytes(key, "utf-8"), bytes(value, "utf-8")
+            )
+
+        checksum = bytes("%02x" % self.checksum, "utf-8")
+        return self.PACKET_LEADER + escaped_data + self.PACKET_TRAILER + checksum
