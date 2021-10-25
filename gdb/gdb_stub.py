@@ -1,13 +1,16 @@
 """See https://sourceware.org/gdb/onlinedocs/gdb/Remote-Protocol.html"""
 from __future__ import annotations
 
+import collections
 import logging
 import socket
 from typing import Callable
+from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Tuple
 
+from . import packet
 from xbdm import ip_transport
 from xbdm import xbdm_transport
 
@@ -20,9 +23,121 @@ class GDBTransport(ip_transport.IPTransport):
     def __init__(self, xbdm: xbdm_transport.XBDMTransport):
         super().__init__(process_callback=self._on_bytes_read)
         self._xbdm = xbdm
+        self._send_queue = collections.deque()
+
+        self.features = {"QStartNoAckMode": False}
+
+    @property
+    def has_buffered_data(self) -> bool:
+        # TODO: Make this thread safe.
+        return self._send_queue or self._read_buffer or self._write_buffer
+
+    def send_packet(self, p: packet.GDBPacket):
+        self._send_queue.append(p)
+        self._send_next_packet()
+
+    def _send_next_packet(self):
+        if not self._send_queue:
+            return
+
+        p = self._send_queue.popleft()
+        data = p.serialize()
+        logger.debug(f"Sending GDB packet: {data.decode('utf-8')}")
+        self.send(data)
 
     def _on_bytes_read(self, _ignored):
-        pass
+        p = packet.GDBPacket()
+
+        while self.read_buffer:
+            if self.read_buffer[0] == b"+":
+                self.shift_read_buffer(1)
+            elif self.read_buffer[0] == b"-":
+                # TODO: Handle - acks.
+                self.shift_read_buffer(1)
+
+            bytes_consumed = p.parse(self.read_buffer)
+            if not bytes_consumed:
+                break
+            self.shift_read_buffer(bytes_consumed)
+            if p.checksum_ok:
+                if not self.features["QStartNoAckMode"]:
+                    self.send(b"+")
+                self._process_packet(p)
+            elif not self.features["QStartNoAckMode"]:
+                self.send(b"-")
+
+    def _process_packet(self, p: packet.GDBPacket):
+        if p.data.startswith("qSupported"):
+            self._handle_supported_query(p)
+            return
+
+        if p.data == "vMustReplyEmpty":
+            self._handle_vMustReplyEmpty(p)
+            return
+
+        if p.data == "QStartNoAckMode":
+            self._handle_QStartNoAckMode(p)
+            return
+
+        logger.warning(f"Unsupported GDB packet {p}")
+
+    def _handle_supported_query(self, p: packet.GDBPacket):
+        request = p.data.split(":", 1)
+        if len(request) != 2:
+            logger.error(f"Unsupported qSupported message {p.data}")
+            return
+
+        response = []
+        features = request[1].split(";")
+        for feature in features:
+            if feature == "multiprocess+":
+                # Do not support multiprocess extensions.
+                response.append("multiprocess-")
+                continue
+            if feature == "swbreak+":
+                self.features["swbreak"] = True
+                response.append("swbreak+")
+                continue
+            if feature == "hwbreak+":
+                self.features["hwbreak"] = True
+                response.append("hwbreak+")
+                continue
+            if feature == "qRelocInsn+":
+                response.append("qRelocInsn-")
+                continue
+            if feature == "fork-events+":
+                response.append("fork-events-")
+                continue
+            if feature == "vfork-events+":
+                response.append("vfork-events-")
+                continue
+            if feature == "exec-events+":
+                response.append("exec-events-")
+                continue
+            if feature == "vContSupported+":
+                response.append("vContSupported-")
+                continue
+            if feature == "QThreadEvents+":
+                response.append("QThreadEvents-")
+                continue
+            if feature == "no-resumed+":
+                response.append("no-resumed-")
+                continue
+            if feature == "xmlRegisters=i386":
+                self.features["xmlRegisters"] = "i386"
+                continue
+
+        response.append("QStartNoAckMode+")
+
+        p = packet.GDBPacket(";".join(response))
+        self.send_packet(p)
+
+    def _handle_vMustReplyEmpty(self, _p: packet.GDBPacket):
+        self.send_packet(packet.GDBPacket())
+
+    def _handle_QStartNoAckMode(self, _p: packet.GDBPacket):
+        self.features["QStartNoAckMode+"] = True
+        self.send_packet(packet.GDBPacket("OK"))
 
 
 def _handle_build_command(
