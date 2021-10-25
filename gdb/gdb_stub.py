@@ -44,6 +44,8 @@ class GDBTransport(ip_transport.IPTransport):
             str, Callable[[GDBPacket], None]
         ] = self._build_dispatch_table(self)
 
+        self._thread_info_buffer: List[int] = []
+
     @property
     def has_buffered_data(self) -> bool:
         # TODO: Make this thread safe.
@@ -288,6 +290,14 @@ class GDBTransport(ip_transport.IPTransport):
             self._handle_query_supported(pkt)
             return
 
+        if query == "fThreadInfo":
+            self._handle_thread_info_start()
+            return
+
+        if query == "sThreadInfo":
+            self._handle_thread_info_continue()
+            return
+
         # if p.data == "qTStatus":
         #     self._handle_query_trace_status(p)
         #     return
@@ -399,6 +409,29 @@ class GDBTransport(ip_transport.IPTransport):
 
         pkt = GDBPacket(";".join(response))
         self.send_packet(pkt)
+
+    def _handle_thread_info_start(self, pkt: GDBPacket):
+        # TODO: Request the thread list from the remote.
+
+        if not self._thread_info_buffer:
+            self.send_packet(GDBPacket("l"))
+            return
+        self._send_thread_info()
+
+    def _handle_thread_info_continue(self, pkt: GDBPacket):
+        if not self._thread_info_buffer:
+            self.send_packet(GDBPacket("l"))
+            return
+        self._send_thread_info()
+
+    def _send_thread_info(self, send_all: bool = True):
+        if send_all:
+            threads = ",".join(["%x" % id for id in self._thread_info_buffer])
+            self.send_packet(GDBPacket(f"m{threads}"))
+            self._thread_info_buffer.clear()
+            return
+
+        self.send_packet(GDBPacket("m%x" % self._thread_info_buffer.pop()))
 
     def _start_no_ack_mode(self):
         self.features["QStartNoAckMode+"] = True
