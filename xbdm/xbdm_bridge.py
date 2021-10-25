@@ -13,7 +13,7 @@ from typing import Tuple
 from . import xbdm_bridge_remote_server
 from . import xbdm_notification_server
 from . import rdcp_command
-from . import ip_transport
+from net import ip_transport
 from . import xbdm_transport
 
 SELECT_TIMEOUT_SECS = 0.25

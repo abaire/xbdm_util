@@ -3,7 +3,7 @@ import logging
 import socket
 from typing import Tuple
 
-from . import ip_transport
+from net import ip_transport
 from . import xbdm_notification_transport
 from . import rdcp_command
 from . import rdcp_response

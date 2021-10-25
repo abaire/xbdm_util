@@ -17,7 +17,7 @@ from typing import Optional
 from typing import Tuple
 
 from .packet import GDBPacket
-from xbdm import ip_transport
+from net import ip_transport
 from xbdm import xbdm_transport
 
 logger = logging.getLogger(__name__)

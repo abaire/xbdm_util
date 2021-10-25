@@ -7,7 +7,7 @@ from typing import Callable
 from typing import Optional
 from typing import Tuple
 
-from . import ip_transport
+from net import ip_transport
 
 logger = logging.getLogger(__name__)
 
