@@ -56,7 +56,7 @@ class GDBPacket:
         self._calculate_checksum()
         self.checksum_ok = self.checksum == received_checksum
 
-        return terminator + 2
+        return terminator + 3
 
     def serialize(self) -> bytes:
 

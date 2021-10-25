@@ -84,21 +84,36 @@ class GDBTransport(ip_transport.IPTransport):
     def _on_bytes_read(self, _ignored):
         p = packet.GDBPacket()
 
-        while self.read_buffer:
-            if self.read_buffer[0] == b"+":
+        while self._read_buffer:
+            if self._read_buffer[0] == ord("+"):
                 self.shift_read_buffer(1)
-            elif self.read_buffer[0] == b"-":
+                continue
+
+            if self._read_buffer[0] == ord("-"):
                 # TODO: Handle - acks.
                 self.shift_read_buffer(1)
-            elif self.read_buffer[0] == 0x03:
-                # TODO: Handle interrupt requests.
-                assert False
-                self.shift_read_buffer(1)
+                continue
 
-            bytes_consumed = p.parse(self.read_buffer)
+            if self._read_buffer[0] == 0x03:
+                # TODO: Handle interrupt requests.
+                logger.warning("Skipping unsupported interrupt request")
+                self.shift_read_buffer(1)
+                continue
+
+            leader = self._read_buffer.find(packet.GDBPacket.PACKET_LEADER)
+            if leader > 0:
+                logger.warning(
+                    f"Skipping {leader} non-leader bytes {self._read_buffer[:leader].hex()}"
+                )
+
+            bytes_consumed = p.parse(self._read_buffer)
             if not bytes_consumed:
                 break
             self.shift_read_buffer(bytes_consumed)
+            logger.debug(
+                f"After processing: [{len(self._read_buffer)}] {self._read_buffer.hex()}"
+            )
+
             if p.checksum_ok:
                 if not self.features["QStartNoAckMode"]:
                     self.send(b"+")
