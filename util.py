@@ -90,10 +90,9 @@ def main(args):
         else:
             manager.start_bridge(None, "XBOX", (xbox_ip, xbox_port))
             bridge = manager.get_bridge((xbox_ip, xbox_port))
+            assert bridge
 
-            if not (
-                bridge or bridge.can_process_xbdm_commands or bridge.connect_xbdm()
-            ):
+            if not (bridge.can_process_xbdm_commands or bridge.connect_xbdm()):
                 print("Failed to communicate with XBOX")
                 manager.shutdown()
                 return 1
