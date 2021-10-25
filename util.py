@@ -8,6 +8,7 @@ from typing import List
 from typing import Tuple
 
 from gdb import gdb_stub
+from util import ansi_formatter
 from util import commands
 from util import shell
 from xbdm import bridge_manager
@@ -69,9 +70,13 @@ def _run_bridge(
 
 def main(args):
     log_level = logging.DEBUG if args.verbose else logging.INFO
-    logging.basicConfig(
-        level=log_level, format="%(levelname)-8s [%(filename)s:%(lineno)d] %(message)s"
-    )
+
+    def fmt():
+        return "%(levelname)-8s [%(filename)s:%(lineno)d] %(message)s"
+
+    logging.basicConfig(level=log_level)
+    if args.color:
+        ansi_formatter.colorize_logs()
 
     logger.debug("Startup")
 
@@ -153,6 +158,12 @@ if __name__ == "__main__":
         metavar="ip_address",
         default="",
         help="IP address to listen on for bridge connections.",
+    )
+
+    parser.add_argument(
+        "--color",
+        help="Enables colorized logs.",
+        action="store_true",
     )
 
     parser.add_argument(
