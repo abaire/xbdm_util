@@ -10,12 +10,12 @@ import collections
 import logging
 import socket
 from typing import Callable
-from typing import Dict
 from typing import List
+from typing import Mapping
 from typing import Optional
 from typing import Tuple
 
-from . import packet
+from .packet import GDBPacket
 from xbdm import ip_transport
 from xbdm import xbdm_transport
 
@@ -27,26 +27,29 @@ class GDBTransport(ip_transport.IPTransport):
 
     def __init__(self, xbdm: xbdm_transport.XBDMTransport):
         super().__init__(process_callback=self._on_bytes_read)
-        self._xbdm = xbdm
+        self._xbdm: xbdm_transport.XBDMTransport = xbdm
         self._send_queue = collections.deque()
 
         self.features = {"QStartNoAckMode": False}
+        self._dispatch_table: Mapping[
+            str, Callable[[GDBPacket], None]
+        ] = self._build_dispatch_table(self)
 
     @property
     def has_buffered_data(self) -> bool:
         # TODO: Make this thread safe.
         return self._send_queue or self._read_buffer or self._write_buffer
 
-    def send_packet(self, p: packet.GDBPacket):
-        self._send_queue.append(p)
+    def send_packet(self, pkt: GDBPacket):
+        self._send_queue.append(pkt)
         self._send_next_packet()
 
     def _send_next_packet(self):
         if not self._send_queue:
             return
 
-        p: packet.GDBPacket = self._send_queue.popleft()
-        data = p.serialize()
+        pkt: GDBPacket = self._send_queue.popleft()
+        data = pkt.serialize()
         logger.debug(f"Sending GDB packet: {data.decode('utf-8')}")
         self.send(data)
 
@@ -58,14 +61,11 @@ class GDBTransport(ip_transport.IPTransport):
             return
 
         # Process any left over escapes.
-        if (
-            self._read_buffer
-            and self._read_buffer[-1] == packet.GDBPacket.RSP_ESCAPE_CHAR
-        ):
+        if self._read_buffer and self._read_buffer[-1] == GDBPacket.RSP_ESCAPE_CHAR:
             self._read_buffer[-1] = data[0] ^ 0x20
             data = data[1:]
 
-        escape_char_index = data.find(packet.GDBPacket.RSP_ESCAPE_CHAR)
+        escape_char_index = data.find(GDBPacket.RSP_ESCAPE_CHAR)
         while escape_char_index >= 0:
             if escape_char_index == len(data):
                 # If there are no more characters after the escape char, just add it to the buffer and let it be
@@ -82,7 +82,7 @@ class GDBTransport(ip_transport.IPTransport):
         self._read_buffer.extend(data)
 
     def _on_bytes_read(self, _ignored):
-        p = packet.GDBPacket()
+        pkt = GDBPacket()
 
         while self._read_buffer:
             if self._read_buffer[0] == ord("+"):
@@ -100,50 +100,231 @@ class GDBTransport(ip_transport.IPTransport):
                 self.shift_read_buffer(1)
                 continue
 
-            leader = self._read_buffer.find(packet.GDBPacket.PACKET_LEADER)
+            leader = self._read_buffer.find(GDBPacket.PACKET_LEADER)
             if leader > 0:
                 logger.warning(
                     f"Skipping {leader} non-leader bytes {self._read_buffer[:leader].hex()}"
                 )
 
-            bytes_consumed = p.parse(self._read_buffer)
+            bytes_consumed = pkt.parse(self._read_buffer)
             if not bytes_consumed:
                 break
             self.shift_read_buffer(bytes_consumed)
+
+            logger.debug(f"Processed packet {pkt}")
             logger.debug(
                 f"After processing: [{len(self._read_buffer)}] {self._read_buffer.hex()}"
             )
 
-            if p.checksum_ok:
+            if pkt.checksum_ok:
                 if not self.features["QStartNoAckMode"]:
                     self.send(b"+")
-                self._process_packet(p)
+                self._process_packet(pkt)
             elif not self.features["QStartNoAckMode"]:
                 self.send(b"-")
 
-    def _process_packet(self, p: packet.GDBPacket):
-        if p.data.startswith("qSupported"):
-            self._handle_supported_query(p)
+    def _process_packet(self, pkt: GDBPacket):
+        """Dispatches the given packet to the appropriate handler."""
+        if len(pkt.data) > 1:
+            command_id = pkt.data[:2]
+            handler = self._dispatch_table.get(command_id)
+            if handler:
+                handler(pkt)
+                return
+
+        if pkt.data:
+            command_id = pkt.data[0]
+            handler = self._dispatch_table.get(command_id)
+            if handler:
+                handler(pkt)
+                return
+
+        logger.warning(f"Unsupported GDB packet {pkt}")
+
+    @staticmethod
+    def _build_dispatch_table(target) -> Mapping[str, Callable[[GDBPacket], None]]:
+        """Populates _dispatch_table with handler callables."""
+        return {
+            "!": target._handle_enable_extended_mode,
+            "?": target._handle_query_halt_reason,
+            "A": target._handle_argv,
+            "b": target._handle_deprecated_command,
+            "B": target._handle_deprecated_command,
+            "bc": target._handle_backward_continue,
+            "bs": target._handle_backward_step,
+            "c": target._handle_continue,
+            "C": target._handle_continue_with_signal,
+            "d": target._handle_deprecated_command,
+            "D": target._handle_detach,
+            "F": target._handle_file_io,
+            "g": target._handle_read_general_register,
+            "G": target._handle_write_general_register,
+            "H": target._handle_set_active_thread,
+            "i": target._handle_step_instruction,
+            "I": target._handle_signal_step,
+            "k": target._handle_kill,
+            "m": target._handle_read_memory,
+            "M": target._handle_write_memory,
+            "p": target._handle_read_register,
+            "P": target._handle_write_register,
+            "q": target._handle_read_query,
+            "Q": target._handle_write_query,
+            "r": target._handle_deprecated_command,
+            "R": target._handle_restart_system,
+            "s": target._handle_single_step,
+            "S": target._handle_single_step_with_signal,
+            "t": target._handle_search_backward,
+            "T": target._handle_check_thread_alive,
+            "v": target._handle_extended_v_command,
+            "X": target._handle_write_memory_binary,
+            "z": target._handle_insert_breakpoint_type,
+            "Z": target._handle_remove_breakpoint_type,
+        }
+
+    def _handle_enable_extended_mode(self, pkt: GDBPacket):
+        logger.error(f"Unsupported packet {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_query_halt_reason(self, pkt: GDBPacket):
+        logger.error(f"Unsupported packet {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_argv(self, pkt: GDBPacket):
+        logger.error(f"Unsupported packet {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_backward_continue(self, pkt: GDBPacket):
+        logger.error(f"Unsupported packet {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_backward_step(self, pkt: GDBPacket):
+        logger.error(f"Unsupported packet {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_continue(self, pkt: GDBPacket):
+        logger.error(f"Unsupported packet {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_continue_with_signal(self, pkt: GDBPacket):
+        logger.error(f"Unsupported packet {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_deprecated_command(self, pkt: GDBPacket):
+        logger.debug(f"Ignoring deprecated command: {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_detach(self, pkt: GDBPacket):
+        logger.error(f"Unsupported packet {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_file_io(self, pkt: GDBPacket):
+        logger.error(f"Unsupported packet {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_read_general_register(self, pkt: GDBPacket):
+        logger.error(f"Unsupported packet {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_write_general_register(self, pkt: GDBPacket):
+        logger.error(f"Unsupported packet {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_set_active_thread(self, pkt: GDBPacket):
+        logger.error(f"Unsupported packet {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_step_instruction(self, pkt: GDBPacket):
+        logger.error(f"Unsupported packet {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_signal_step(self, pkt: GDBPacket):
+        logger.error(f"Unsupported packet {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_kill(self, pkt: GDBPacket):
+        logger.error(f"Unsupported packet {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_read_memory(self, pkt: GDBPacket):
+        logger.error(f"Unsupported packet {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_write_memory(self, pkt: GDBPacket):
+        logger.error(f"Unsupported packet {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_read_register(self, pkt: GDBPacket):
+        logger.error(f"Unsupported packet {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_write_register(self, pkt: GDBPacket):
+        logger.error(f"Unsupported packet {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_read_query(self, pkt: GDBPacket):
+        if pkt.data.startswith("qSupported"):
+            self._handle_supported_query(pkt)
             return
 
-        if p.data == "vMustReplyEmpty":
-            self._handle_vMustReplyEmpty(p)
+        # if p.data == "qTStatus":
+        #     self._handle_query_trace_status(p)
+        #     return
+
+        logger.error(f"Unsupported query read packet {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_write_query(self, pkt: GDBPacket):
+        if pkt.data == "QStartNoAckMode":
+            self._start_no_ack_mode()
             return
 
-        if p.data == "QStartNoAckMode":
-            self._handle_QStartNoAckMode(p)
+        logger.error(f"Unsupported query write packet {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_restart_system(self, pkt: GDBPacket):
+        logger.error(f"Unsupported packet {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_single_step(self, pkt: GDBPacket):
+        logger.error(f"Unsupported packet {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_single_step_with_signal(self, pkt: GDBPacket):
+        logger.error(f"Unsupported packet {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_search_backward(self, pkt: GDBPacket):
+        logger.error(f"Unsupported packet {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_check_thread_alive(self, pkt: GDBPacket):
+        logger.error(f"Unsupported packet {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_extended_v_command(self, pkt: GDBPacket):
+        if pkt.data == "vMustReplyEmpty":
+            self.send_packet(GDBPacket())
             return
 
-        if p.data == "qTStatus":
-            self._handle_query_trace_status(p)
-            return
+        logger.error(f"Unsupported v packet {pkt.data}")
+        self.send_packet(GDBPacket())
 
-        logger.warning(f"Unsupported GDB packet {p}")
+    def _handle_write_memory_binary(self, pkt: GDBPacket):
+        logger.error(f"Unsupported packet {pkt.data}")
+        self.send_packet(GDBPacket())
 
-    def _handle_supported_query(self, p: packet.GDBPacket):
-        request = p.data.split(":", 1)
+    def _handle_insert_breakpoint_type(self, pkt: GDBPacket):
+        logger.error(f"Unsupported packet {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_remove_breakpoint_type(self, pkt: GDBPacket):
+        logger.error(f"Unsupported packet {pkt.data}")
+        self.send_packet(GDBPacket())
+
+    def _handle_supported_query(self, pkt: GDBPacket):
+        request = pkt.data.split(":", 1)
         if len(request) != 2:
-            logger.error(f"Unsupported qSupported message {p.data}")
+            logger.error(f"Unsupported qSupported message {pkt.data}")
             return
 
         response = []
@@ -188,18 +369,12 @@ class GDBTransport(ip_transport.IPTransport):
 
         response.append("QStartNoAckMode+")
 
-        p = packet.GDBPacket(";".join(response))
-        self.send_packet(p)
+        pkt = GDBPacket(";".join(response))
+        self.send_packet(pkt)
 
-    def _handle_vMustReplyEmpty(self, _p: packet.GDBPacket):
-        self.send_packet(packet.GDBPacket())
-
-    def _handle_QStartNoAckMode(self, _p: packet.GDBPacket):
+    def _start_no_ack_mode(self):
         self.features["QStartNoAckMode+"] = True
-        self.send_packet(packet.GDBPacket("OK"))
-
-    def _handle_query_trace_status(self, _p: packet.GDBPacket):
-        self.send_packet(packet.GDBPacket(""))
+        self.send_packet(GDBPacket("OK"))
 
 
 def _handle_build_command(
