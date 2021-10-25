@@ -466,7 +466,7 @@ def _cmd_debugger_resume(shell, _args: [str]) -> Result:
 
 def _attach_debugger(shell):
     if not shell._debugger:
-        shell._bridge.attach_debugger()
+        shell.attach_debugger()
 
 
 DISPATCH_TABLE = {

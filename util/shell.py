@@ -27,7 +27,7 @@ def execute_command(command, command_args, bridge: XBDMBridge) -> int:
 class Shell:
     def __init__(self, bridge: XBDMBridge):
         self._bridge: XBDMBridge = bridge
-        self._debugger_context: Optional[Debugger] = None
+        self._debugger: Optional[Debugger] = None
 
     def run(self):
         self._print_prompt()
@@ -46,6 +46,7 @@ class Shell:
             try:
                 result = self._handle_shell_command(command, command_args)
             except:
+                logger.debug(f"Exception processing shell command: {sys.exc_info()}")
                 print("Invalid command")
                 self._print_prompt()
                 continue
@@ -61,8 +62,8 @@ class Shell:
                     else:
                         cmd = processor(command_args)
 
-                        # Hack: Intercept the command to see if it is a NotifyAt
-                        # and stand up a listener if necessary.
+                        # Hack: Intercept the command to see if it is a NotifyAt and
+                        # stand up a listener if necessary.
                         if command == "notifyat" and isinstance(
                             cmd, rdcp_command.NotifyAt
                         ):
@@ -93,11 +94,11 @@ class Shell:
             self._print_prompt()
 
     def attach_debugger(self) -> Debugger:
-        if self._debugger_context:
-            return self._debugger_context
+        if self._debugger:
+            return self._debugger
 
-        self._debugger_context = Debugger(self._bridge)
-        self._debugger_context.attach()
+        self._debugger = Debugger(self._bridge)
+        self._debugger.attach()
 
     def _handle_notifyat(
         self, address: Optional[str], port: int, is_drop: bool, is_debug: bool
@@ -114,8 +115,8 @@ class Shell:
         self._bridge.create_notification_listener(port)
 
     def _print_prompt(self) -> None:
-        if self._debugger_context:
-            print(f"dbg {self._debugger_context.short_state_info}> ", end="")
+        if self._debugger:
+            print(f"dbg {self._debugger.short_state_info}> ", end="")
         else:
             print("> ", end="")
         sys.stdout.flush()

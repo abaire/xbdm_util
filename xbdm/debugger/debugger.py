@@ -539,9 +539,12 @@ class Debugger(_XBDMClient):
 
         return thread.get_full_context()
 
-    def halt(self) -> bool:
+    def halt(self, timeout_seconds=0.250) -> bool:
         """Halts all running threads."""
         response = self._call(rdcp_command.Halt())
+        if not response.ok:
+            return False
+
         return response.ok
 
     def continue_all(self, break_on_exceptions: bool = True):

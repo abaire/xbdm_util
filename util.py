@@ -158,6 +158,7 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "-c",
         "--color",
         help="Enables colorized logs.",
         action="store_true",
