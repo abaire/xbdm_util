@@ -224,6 +224,9 @@ class XBDMBridge:
         except ConnectionRefusedError:
             logger.error(f"Failed to connect to XBDM {self.xbox_info}")
             return False
+        except OSError as err:
+            logger.error(f"Failed to connect to XBDM {self.xbox_info} {err}")
+            return False
 
         logger.info(f"Socket connected to XBDM {self.xbox_info}")
         sock.setblocking(False)

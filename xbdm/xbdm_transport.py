@@ -12,7 +12,17 @@ import util
 logger = logging.getLogger(__name__)
 
 logging.Logger.xbdm = util.register_colorized_logging_level(
-    "XBDM", util.ANSI_CYAN + util.ANSI_BRIGHT_WHITE_BACKGROUND
+    "XBDM", util.ANSI_CYAN + util.ANSI_BRIGHT_WHITE_BACKGROUND + util.ANSI_BOLD
+)
+logging.Logger.xbdm_send = util.register_colorized_logging_level(
+    "<< XBDM",
+    util.ANSI_CYAN
+    + util.ANSI_BRIGHT_WHITE_BACKGROUND
+    + util.ANSI_UNDERLINE
+    + util.ANSI_BOLD,
+)
+logging.Logger.xbdm_debug = util.register_colorized_super_verbose_logging_level(
+    "XBDMDBG", util.ANSI_CYAN + util.ANSI_WHITE_BACKGROUND
 )
 
 
@@ -50,7 +60,7 @@ class XBDMTransport(ip_transport.IPTransport):
         self._state = self.STATE_CONNECTED
 
     def send_command(self, cmd: rdcp_command.RDCPCommand) -> bool:
-        logger.xbdm(f"Queueing RDCP command {cmd}")
+        logger.xbdm_send(f"Queueing RDCP command {cmd}")
         if self._state < self.STATE_CONNECTED:
             logger.error("Not connected")
             return False
@@ -68,7 +78,7 @@ class XBDMTransport(ip_transport.IPTransport):
         if self._state != self.STATE_CONNECTED or not self._command_queue:
             return
         bytes = self._command_queue[0].serialize()
-        # logger.xbdm(f"Sending RDCP {bytes}")
+        logger.xbdm_debug(f"Sending RDCP {bytes}")
         self.send(bytes)
         self._state = self.STATE_AWAITING_RESPONSE
 
@@ -117,7 +127,7 @@ class XBDMTransport(ip_transport.IPTransport):
 
             current_command, bytes_processed = parse_response()
 
-        logger.xbdm(
+        logger.xbdm_debug(
             f"After processing: [{len(transport.read_buffer)}] {transport.read_buffer}"
         )
 

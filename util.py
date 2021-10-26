@@ -10,6 +10,7 @@ from typing import Tuple
 from gdb import gdb_stub
 from util import ansi_formatter
 from util import commands
+from util import debug_logging
 from util import shell
 from xbdm import bridge_manager
 from xbdm import rdcp_command
@@ -69,7 +70,12 @@ def _run_bridge(
 
 
 def main(args):
-    log_level = logging.DEBUG if args.verbose else logging.INFO
+    if args.super_verbose:
+        log_level = debug_logging.SUPER_VERBOSE
+    elif args.verbose:
+        log_level = logging.DEBUG
+    else:
+        log_level = logging.INFO
 
     logging.basicConfig(level=log_level)
     if args.color:
@@ -167,6 +173,13 @@ if __name__ == "__main__":
         "-v",
         "--verbose",
         help="Enables verbose logging information.",
+        action="store_true",
+    )
+
+    parser.add_argument(
+        "-vv",
+        "--super_verbose",
+        help="Enables all logging information.",
         action="store_true",
     )
 

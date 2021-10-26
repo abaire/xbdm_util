@@ -30,10 +30,17 @@ from xbdm import xbdm_bridge
 logger = logging.getLogger(__name__)
 
 logging.Logger.gdb = util.register_colorized_logging_level(
-    "GDB", util.ANSI_BLUE + util.ANSI_BRIGHT_WHITE_BACKGROUND
+    "GDB", util.ANSI_BLUE + util.ANSI_BRIGHT_WHITE_BACKGROUND + util.ANSI_BOLD
 )
 logging.Logger.gdb_send = util.register_colorized_logging_level(
-    "<< GDB", util.ANSI_BLUE + util.ANSI_BRIGHT_WHITE_BACKGROUND + util.ANSI_UNDERLINE
+    "<< GDB",
+    util.ANSI_BLUE
+    + util.ANSI_BRIGHT_WHITE_BACKGROUND
+    + util.ANSI_UNDERLINE
+    + util.ANSI_BOLD,
+)
+logging.Logger.gdb_debug = util.register_colorized_super_verbose_logging_level(
+    "GDBDBG", util.ANSI_BLUE + util.ANSI_WHITE_BACKGROUND
 )
 
 
@@ -124,6 +131,7 @@ class GDBTransport(ip_transport.IPTransport):
     def start(self) -> bool:
         connected = self._bridge.connect_xbdm()
         if not connected:
+            logger.error("Failed to connect to XBDM")
             return False
 
         self._debugger = debugger.Debugger(self._bridge)
