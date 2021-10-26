@@ -97,6 +97,9 @@ class GDBTransport(ip_transport.IPTransport):
         self._thread_info_buffer: List[int] = []
 
     def start(self):
+        connected = self._bridge.connect_xbdm()
+        assert connected
+
         self._debugger = debugger.Debugger(self._bridge)
         self._debugger.attach()
         self._debugger.halt()
@@ -305,11 +308,7 @@ class GDBTransport(ip_transport.IPTransport):
         self.send_packet(GDBPacket())
 
     def _handle_read_general_registers(self, pkt: GDBPacket):
-        thread_id = self._command_thread_id_context.get("g", None)
-        if thread_id is None:
-            logger.warning("Received 'g' command but no thread set! Treating as ANY.")
-            thread_id = self.TID_ANY_THREAD
-
+        thread_id = self._get_thread_context_for_command("g")
         if thread_id == self.TID_ALL_THREADS:
             logger.error(f"Unsupported 'g' query for all threads.")
             self._send_empty()
@@ -367,8 +366,11 @@ class GDBTransport(ip_transport.IPTransport):
         self.send_packet(GDBPacket())
 
     def _handle_read_memory(self, pkt: GDBPacket):
-        logger.error(f"Unsupported packet {pkt.data}")
-        self.send_packet(GDBPacket())
+        addr, length = pkt.data[1:].split(",")
+        addr = int(addr, 16)
+        length = int(length, 16)
+        mem: Optional[str] = self._debugger.get_memory(addr, length)
+        self.send_packet(GDBPacket(mem))
 
     def _handle_write_memory(self, pkt: GDBPacket):
         logger.error(f"Unsupported packet {pkt.data}")
@@ -529,6 +531,11 @@ class GDBTransport(ip_transport.IPTransport):
     def _handle_thread_info_start(self):
         self._thread_info_buffer = [thr.thread_id for thr in self._debugger.threads]
 
+        # Move the preferred thread to the front of the list.
+        first_id = self._debugger.any_thread_id
+        self._thread_info_buffer.remove(first_id)
+        self._thread_info_buffer.insert(0, first_id)
+
         if not self._thread_info_buffer:
             self.send_packet(GDBPacket("l"))
             return
@@ -610,6 +617,15 @@ class GDBTransport(ip_transport.IPTransport):
     def _start_no_ack_mode(self):
         self.features["QStartNoAckMode+"] = True
         self.send_packet(GDBPacket("OK"))
+
+    def _get_thread_context_for_command(self, cmd):
+        thread_id = self._command_thread_id_context.get(cmd, None)
+        if thread_id is None:
+            logger.warning(
+                f"Received '{cmd}' command but no thread set! Treating as ANY."
+            )
+            thread_id = self.TID_ANY_THREAD
+        return thread_id
 
 
 def _handle_build_command(
