@@ -637,14 +637,34 @@ class Debugger(_XBDMClient):
         response = self._call(rdcp_command.SetMem(address, data))
         return response.ok
 
-    def add_breakpoint_at_address(self, address) -> bool:
+    def add_breakpoint_at_address(self, address: int) -> bool:
         """Adds a breakpoint at the given target address."""
         response = self._call(rdcp_command.BreakAtAddress(address))
         return response.ok
 
-    def remove_breakpoint_at_address(self, address) -> bool:
+    def remove_breakpoint_at_address(self, address: int) -> bool:
         """Removes a breakpoint from the given target address."""
         response = self._call(rdcp_command.BreakAtAddress(address, clear=True))
+        return response.ok
+
+    def add_read_watchpoint(self, address: int, length: int) -> bool:
+        """Adds a read watchpoint on the given memory block."""
+        response = self._call(rdcp_command.BreakOnRead(address, length))
+        return response.ok
+
+    def add_write_watchpoint(self, address: int, length: int) -> bool:
+        """Adds a write watchpoint on the given memory block."""
+        response = self._call(rdcp_command.BreakOnWrite(address, length))
+        return response.ok
+
+    def remove_read_watchpoint(self, address: int, length: int) -> bool:
+        """Removes a read watchpoint on the given memory block."""
+        response = self._call(rdcp_command.BreakOnRead(address, length, clear=True))
+        return response.ok
+
+    def remove_write_watchpoint(self, address: int, length: int) -> bool:
+        """Removes a write watchpoint on the given memory block."""
+        response = self._call(rdcp_command.BreakOnWrite(address, length, clear=True))
         return response.ok
 
     def _restart_and_attach(self):

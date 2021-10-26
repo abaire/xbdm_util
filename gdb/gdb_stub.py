@@ -514,12 +514,14 @@ class GDBTransport(ip_transport.IPTransport):
     @staticmethod
     def _extract_breakpoint_command_params(
         pkt: GDBPacket,
-    ) -> Tuple[int, int, Any, Optional[List]]:
+    ) -> Tuple[int, int, int, Optional[List]]:
         elements = pkt.data[1:].split(";")
 
         type, addr, kind = elements[0].split(",")
         type = int(type)
         addr = int(addr, 16)
+        kind = int(kind, 16)
+
         args = None
         if len(elements) > 1:
             args = elements[1:]
@@ -563,20 +565,32 @@ class GDBTransport(ip_transport.IPTransport):
             return
         self._send_error(errno.EBADE)
 
-    def _handle_insert_write_breakpoint(self, addr, kind):
-        logger.error("TODO: IMPLEMENT _handle_insert_write_breakpoint")
-        # self.send_packet(GDBPacket("OK"))
-        self._send_empty()
+    def _handle_insert_write_breakpoint(self, addr, length):
+        if not self._debugger.add_write_watchpoint(addr, length):
+            self._send_error(errno.EBADMSG)
+        else:
+            self._send_ok()
 
-    def _handle_insert_read_breakpoint(self, addr, kind):
-        logger.error("TODO: IMPLEMENT _handle_insert_read_breakpoint")
-        # self.send_packet(GDBPacket("OK"))
-        self._send_empty()
+    def _handle_insert_read_breakpoint(self, addr, length):
+        if not self._debugger.add_read_watchpoint(addr, length):
+            self._send_error(errno.EBADMSG)
+        else:
+            self._send_ok()
 
-    def _handle_insert_access_breakpoint(self, addr, kind):
-        logger.error("TODO: IMPLEMENT _handle_insert_access_breakpoint")
-        # self.send_packet(GDBPacket("OK"))
-        self._send_empty()
+    def _handle_insert_access_breakpoint(self, addr, length):
+        if not self._debugger.add_read_watchpoint(addr, length):
+            self._send_error(errno.EBADMSG)
+            return
+
+        if not self._debugger.add_write_watchpoint(addr, length):
+            self._send_error(errno.EBADMSG)
+            if not self._debugger.remove_read_watchpoint(addr, length):
+                logger.warning(
+                    "Failure to add write watchpoint left hanging read watchpoint at 0x%X %d"
+                    % (addr, length)
+                )
+        else:
+            self._send_ok()
 
     def _handle_remove_breakpoint_type(self, pkt: GDBPacket):
         type, addr, kind, _args = self._extract_breakpoint_command_params(pkt)
@@ -604,26 +618,32 @@ class GDBTransport(ip_transport.IPTransport):
         logger.error(f"Unsupported packet {pkt.data}")
         self.send_packet(GDBPacket())
 
-    def _handle_remove_software_breakpoint(self, addr, kind):
+    def _handle_remove_software_breakpoint(self, addr: int, kind: int):
         if kind != 1:
             logger.warning(f"Remove swbreak at 0x%X with kind {kind}" % addr)
         self._debugger.remove_breakpoint_at_address(addr)
         self._send_ok()
 
-    def _handle_remove_write_breakpoint(self, addr, kind):
-        logger.error("TODO: IMPLEMENT _handle_remove_write_breakpoint")
-        # self.send_packet(GDBPacket("OK"))
-        self._send_empty()
+    def _handle_remove_write_breakpoint(self, addr, length):
+        if not self._debugger.remove_write_watchpoint(addr, length):
+            self._send_error(errno.EBADMSG)
+        else:
+            self._send_ok()
 
-    def _handle_remove_read_breakpoint(self, addr, kind):
-        logger.error("TODO: IMPLEMENT _handle_remove_read_breakpoint")
-        # self.send_packet(GDBPacket("OK"))
-        self._send_empty()
+    def _handle_remove_read_breakpoint(self, addr, length):
+        if not self._debugger.remove_read_watchpoint(addr, length):
+            self._send_error(errno.EBADMSG)
+        else:
+            self._send_ok()
 
-    def _handle_remove_access_breakpoint(self, addr, kind):
-        logger.error("TODO: IMPLEMENT _handle_remove_access_breakpoint")
-        # self.send_packet(GDBPacket("OK"))
-        self._send_empty()
+    def _handle_remove_access_breakpoint(self, addr, length):
+        ret = self._debugger.remove_read_watchpoint(addr, length)
+        ret = self._debugger.remove_write_watchpoint(addr, length) and ret
+
+        if not ret:
+            self._send_error(errno.EBADMSG)
+        else:
+            self._send_ok()
 
     def _handle_query_attached(self, _pkt: GDBPacket):
         # If attached to an existing process:
