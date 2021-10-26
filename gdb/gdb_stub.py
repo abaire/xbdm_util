@@ -6,7 +6,9 @@ See https://www.embecosm.com/appnotes/ean4/embecosm-howto-rsp-server-ean4-issue-
 
 from __future__ import annotations
 
+import binascii
 import collections
+import errno
 import logging
 import socket
 from typing import Any
@@ -377,12 +379,27 @@ class GDBTransport(ip_transport.IPTransport):
         addr, length = pkt.data[1:].split(",")
         addr = int(addr, 16)
         length = int(length, 16)
-        mem: Optional[str] = self._debugger.get_memory(addr, length)
-        self.send_packet(GDBPacket(mem))
+        mem: Optional[bytes] = self._debugger.get_memory(addr, length)
+        if mem:
+            self.send_packet(GDBPacket(mem.hex()))
+        else:
+            self._send_error(errno.EACCES)
 
     def _handle_write_memory(self, pkt: GDBPacket):
-        logger.error(f"Unsupported packet {pkt.data}")
-        self.send_packet(GDBPacket())
+        place, data = pkt.data[1:].split(":")
+        addr, length = place.split(",")
+        addr = int(addr, 16)
+        length = int(length, 16)
+
+        if not length:
+            self._send_ok()
+            return
+
+        data = binascii.unhexlify(data)
+        if length != len(data):
+            self._send_error(errno.EBADMSG)
+            return
+        self._set_memory(addr, data)
 
     def _handle_read_register(self, pkt: GDBPacket):
         logger.error(f"Unsupported packet {pkt.data}")
@@ -482,8 +499,17 @@ class GDBTransport(ip_transport.IPTransport):
             self._send_ok()
             return
 
-        logger.error(f"TODO: WRITE MEM AT {addr}")
-        self._send_error(1)
+        if length != len(data):
+            self._send_error(errno.EBADMSG)
+            return
+        self._set_memory(addr, data)
+
+    def _set_memory(self, addr: int, data: bytes):
+        result = self._debugger.set_memory(addr, data)
+        if not result:
+            self._send_error(errno.EPIPE)
+            return
+        self._send_ok()
 
     @staticmethod
     def _extract_breakpoint_command_params(

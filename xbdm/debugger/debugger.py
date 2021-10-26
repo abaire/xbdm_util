@@ -625,12 +625,17 @@ class Debugger(_XBDMClient):
             thread.continue_once(break_on_exceptions)
         return True
 
-    def get_memory(self, address: int, length: int) -> Optional[str]:
+    def get_memory(self, address: int, length: int) -> Optional[bytes]:
         """Reads memory from the target."""
         response = self._call(rdcp_command.GetMemBinary(address, length))
         if not response.ok:
             return None
         return response.printable_data
+
+    def set_memory(self, address: int, data: bytes) -> bool:
+        """Writes memory to the given target address."""
+        response = self._call(rdcp_command.SetMem(address, data))
+        return response.ok
 
     def _restart_and_attach(self):
         response = self._call(

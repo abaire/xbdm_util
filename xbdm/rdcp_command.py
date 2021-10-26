@@ -1028,16 +1028,12 @@ class GetMemBinary(ProcessedCommand):
         def __init__(self, response: rdcp_response.RDCPResponse):
             super().__init__(response)
 
-            self.printable_data = ""
             self.data = bytes()
 
             if not self.ok:
                 return
 
             self.data = response.data
-            # TODO: Consider dropping printable_data.
-            # The only differentiation between getmem2 and getmem is that this method returns a binary, so converting it back to a hex string goes against the intent.
-            self.printable_data = self.data.hex()
 
         @property
         def ok(self):
@@ -1045,7 +1041,7 @@ class GetMemBinary(ProcessedCommand):
 
         @property
         def _body_str(self) -> str:
-            return f"{self.printable_data}"
+            return f"{self.data.hex()}"
 
     def __init__(self, addr, length, handler=None):
         super().__init__("getmem2", response_class=self.Response, handler=handler)
@@ -1097,15 +1093,12 @@ class GetChecksum(ProcessedCommand):
         def __init__(self, response: rdcp_response.RDCPResponse):
             super().__init__(response)
 
-            self.printable_data = ""
             self.data = bytes()
 
             if not self.ok:
                 return
 
             self.data = response.data
-            # TODO: Consider dropping printable_data.
-            self.printable_data = binascii.hexlify(self.data)
 
         @property
         def ok(self):
@@ -1113,7 +1106,7 @@ class GetChecksum(ProcessedCommand):
 
         @property
         def _body_str(self) -> str:
-            return f"{self.printable_data}"
+            return f"{self.data.hex()}"
 
     def __init__(self, addr: int, length: int, blocksize: int, handler=None):
         super().__init__("getsum", response_class=self.Response, handler=handler)
