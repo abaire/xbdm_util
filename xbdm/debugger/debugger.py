@@ -627,7 +627,7 @@ class Debugger(_XBDMClient):
 
     def get_memory(self, address: int, length: int) -> Optional[str]:
         """Reads memory from the target."""
-        response = self._call(rdcp_command.GetMem(address, length))
+        response = self._call(rdcp_command.GetMemBinary(address, length))
         if not response.ok:
             return None
         return response.printable_data

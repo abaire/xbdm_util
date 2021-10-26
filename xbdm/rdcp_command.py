@@ -1037,7 +1037,7 @@ class GetMemBinary(ProcessedCommand):
             self.data = response.data
             # TODO: Consider dropping printable_data.
             # The only differentiation between getmem2 and getmem is that this method returns a binary, so converting it back to a hex string goes against the intent.
-            self.printable_data = binascii.hexlify(self.data)
+            self.printable_data = self.data.hex()
 
         @property
         def ok(self):

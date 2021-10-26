@@ -331,7 +331,7 @@ class GDBTransport(ip_transport.IPTransport):
                 dummy = fmt % 0
                 str_value = "?" * len(dummy)
             else:
-                str_value = fmt % value
+                str_value = fmt % socket.htonl(value)
 
             # logger.debug(f"{register}: {str_value}")
             body.append(str_value)
@@ -449,6 +449,10 @@ class GDBTransport(ip_transport.IPTransport):
     def _handle_extended_v_command(self, pkt: GDBPacket):
         if pkt.data == "vMustReplyEmpty":
             self._send_empty()
+            return
+
+        if pkt.data == "vCont?":
+            self._handle_vcont_query()
             return
 
         logger.error(f"Unsupported v packet {pkt.data}")
@@ -596,6 +600,14 @@ class GDBTransport(ip_transport.IPTransport):
         body = body[start:end]
 
         self.send_packet(GDBBinaryPacket(prefix + body))
+
+    def _handle_vcont_query(self):
+        # Support
+        #  c - continue
+        #  C - continue with signal
+        #  s - step
+        #  S - step with signal
+        self.send_packet(GDBPacket("vcont;c;C;s;S"))
 
     def _send_empty(self):
         self.send_packet(GDBPacket())
