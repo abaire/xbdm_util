@@ -211,9 +211,8 @@ class GDBTransport(ip_transport.IPTransport):
                 continue
 
             if self._read_buffer[0] == 0x03:
-                # TODO: Handle interrupt requests.
-                logger.warning("Skipping unsupported interrupt request")
                 self.shift_read_buffer(1)
+                self._handle_interrupt_request()
                 continue
 
             leader = self._read_buffer.find(GDBPacket.PACKET_LEADER)
@@ -296,6 +295,18 @@ class GDBTransport(ip_transport.IPTransport):
             "z": target._handle_remove_breakpoint_type,
             "Z": target._handle_insert_breakpoint_type,
         }
+
+    def _handle_interrupt_request(self):
+        logger.gdb("Interrupt request")
+        if not self._debugger.halt():
+            self._send_error(errno.EBADMSG)
+            return
+
+        thread = self._debugger.active_thread
+        if thread:
+            self._send_thread_stop_packet(thread)
+        else:
+            self._send_ok()
 
     def _handle_enable_extended_mode(self, pkt: GDBPacket):
         logger.error(f"Unsupported packet {pkt.data}")
@@ -816,6 +827,7 @@ class GDBTransport(ip_transport.IPTransport):
         if args == "c":
             logger.warning("TODO: Check that continue_all actually works.")
             self._debugger.continue_all()
+            self._debugger.go()
             self._send_ok()
             return
 
