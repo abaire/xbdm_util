@@ -777,21 +777,21 @@ class GetContext(ProcessedCommand):
         self,
         thread_id: int,
         enable_control: bool = False,
-        enable_interrupt: bool = False,
-        enable_full: bool = False,
-        enable_fp: bool = False,
+        enable_integer: bool = False,
+        enable_float: bool = False,
         handler=None,
     ):
         super().__init__("getcontext", response_class=self.Response, handler=handler)
         flags = []
-        if enable_control:
-            flags.append("control")
-        if enable_interrupt:
-            flags.append("int")
-        if enable_full:
+        if enable_control and enable_integer and enable_float:
             flags.append("full")
-        if enable_fp:
-            flags.append("fp")
+        else:
+            if enable_control:
+                flags.append("control")
+            if enable_integer:
+                flags.append("int")
+            if enable_float:
+                flags.append("fp")
         if not flags:
             flags = ""
         else:

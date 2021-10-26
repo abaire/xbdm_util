@@ -368,6 +368,9 @@ class GDBTransport(ip_transport.IPTransport):
         if not context:
             self._send_error(self.ERR_RETRIEVAL_FAILED)
 
+        reg_info = {k: "0x%08X" % v for k, v in context.registers.items()}
+        logger.info(f"Registers:\n{reg_info}\n")
+
         body = []
         for register in self.ORDERED_REGISTERS:
             value: Optional[int] = context.registers.get(register, None)

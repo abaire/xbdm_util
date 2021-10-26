@@ -162,27 +162,35 @@ class Thread(_XBDMClient):
         self.create_time = response.create
 
     def get_context(self) -> Optional[Context]:
-        response = self._call(
-            rdcp_command.GetContext(self.thread_id, enable_full=True, enable_fp=True)
-        )
-        if not response.ok:
+        registers = self._get_context()
+        if not registers:
             return None
-        return self.Context(response.registers)
+        return self.Context(registers)
 
     def get_full_context(self) -> Optional[FullContext]:
-        response = self._call(
-            rdcp_command.GetContext(self.thread_id, enable_full=True, enable_fp=True)
-        )
-        if not response.ok:
+        basic_registers = self._get_context()
+        if not basic_registers:
             return None
 
-        basic_registers = response.registers
         ext_registers = None
         response = self._call(rdcp_command.GetExtContext(self.thread_id))
         if response.ok:
             ext_registers = response.data
 
         return self.FullContext(basic_registers, ext_registers)
+
+    def _get_context(self) -> Optional[Dict[str, Optional[int]]]:
+        response = self._call(
+            rdcp_command.GetContext(
+                self.thread_id,
+                enable_float=True,
+                enable_control=True,
+                enable_integer=True,
+            )
+        )
+        if not response.ok:
+            return None
+        return response.registers
 
     def set_step_instruction_mode(self, enabled: bool) -> bool:
         context = self.get_context()

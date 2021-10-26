@@ -217,12 +217,10 @@ def _get_context(args) -> Optional[rdcp_command.RDCPCommand]:
     if not args[1:]:
         enable_control = True
         enable_integer = True
-        enable_full = True
         enable_floatingpoint = True
     else:
         enable_control = False
         enable_integer = False
-        enable_full = False
         enable_floatingpoint = False
 
         for arg in args[1:]:
@@ -233,14 +231,11 @@ def _get_context(args) -> Optional[rdcp_command.RDCPCommand]:
                 enable_integer = True
             elif arg == "fp":
                 enable_floatingpoint = True
-            elif arg == "full":
-                enable_full = True
 
     return rdcp_command.GetContext(
         thread_id,
         enable_control,
         enable_integer,
-        enable_full,
         enable_floatingpoint,
         handler=print,
     )
