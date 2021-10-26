@@ -630,7 +630,7 @@ class Debugger(_XBDMClient):
         response = self._call(rdcp_command.GetMemBinary(address, length))
         if not response.ok:
             return None
-        return response.printable_data
+        return response.data
 
     def set_memory(self, address: int, data: bytes) -> bool:
         """Writes memory to the given target address."""

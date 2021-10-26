@@ -40,6 +40,9 @@ logging.Logger.gdb_send = util.register_colorized_logging_level(
 class GDBTransport(ip_transport.IPTransport):
     """GDB Remote Serial Protocol translation of XDBM functions."""
 
+    STATE_INIT = 0
+    STATE_CONNECTED = 1
+
     # Indicates that a request should apply to all threads.
     TID_ALL_THREADS = -1
     # Indicates that a request should apply to any arbitrary thread.
@@ -100,6 +103,7 @@ class GDBTransport(ip_transport.IPTransport):
 
     def __init__(self, bridge: xbdm_bridge.XBDMBridge, name: str):
         super().__init__(process_callback=self._on_bytes_read, name=name)
+        self._state = self.STATE_INIT
         self._bridge: xbdm_bridge.XBDMBridge = bridge
         self._debugger: Optional[debugger.Debugger] = None
         self._send_queue = collections.deque()
@@ -137,6 +141,7 @@ class GDBTransport(ip_transport.IPTransport):
             self._debugger = None
 
         super().close()
+        self._state = self.STATE_INIT
 
     @property
     def has_buffered_data(self) -> bool:
@@ -662,6 +667,10 @@ class GDBTransport(ip_transport.IPTransport):
         # self.send_packet(GDBPacket("0"))
 
     def _handle_query_supported(self, pkt: GDBPacket):
+        if self._state != self.STATE_INIT:
+            logger.warning("Ignoring assumed qSupported retransmission")
+            return
+
         request = pkt.data.split(":", 1)
         if len(request) != 2:
             logger.error(f"Unsupported qSupported message {pkt.data}")
@@ -714,6 +723,8 @@ class GDBTransport(ip_transport.IPTransport):
         response.append("qXfer:features:read+")
 
         pkt = GDBPacket(";".join(response))
+
+        self._state = self.STATE_CONNECTED
         self.send_packet(pkt)
 
     def _handle_thread_info_start(self):
