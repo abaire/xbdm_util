@@ -34,6 +34,7 @@ class GDBPacket:
 
     def __init__(self, data: Optional[str] = None):
         self.data: Optional[str] = data
+        self.binary_data: Optional[bytes] = data.encode("utf-8") if data else None
         self.checksum: int = 0
         self.checksum_ok: bool = data is not None
         self._calculate_checksum()
@@ -46,11 +47,34 @@ class GDBPacket:
         return ret
 
     def _calculate_checksum(self):
-        if not self.data:
+        if not self.data and not self.binary_data:
             self.checksum = 0
             return
 
-        self.checksum = _mod_256_checksum(self.data.encode("utf=-8"))
+        if not self.binary_data:
+            self.binary_data = self.data.encode("utf=-8")
+        self.checksum = _mod_256_checksum(self.binary_data)
+
+    def get_leading_string(self, length: int = 1) -> Optional[str]:
+        """Returns the first `length` characters as a utf-8 string."""
+        if self.data:
+            if len(self.data) < length:
+                return None
+            return self.data[:length]
+
+        if self.binary_data and len(self.binary_data) >= length:
+            return self.binary_data[:length].decode("utf-8")
+        return None
+
+    def get_one_char_command(self) -> Optional[str]:
+        if self.data:
+            if len(self.data) < 2:
+                return None
+            return self.data[:2]
+
+        if self.binary_data and len(self.binary_data) >= 2:
+            return self.binary_data[:2].decode("utf-8")
+        return None
 
     def parse(self, buffer: bytes) -> int:
         leader = buffer.find(self.PACKET_LEADER)
@@ -64,7 +88,12 @@ class GDBPacket:
 
         received_checksum = int(buffer[terminator + 1 : terminator + 3], 16)
 
-        self.data = buffer[body_start:terminator].decode("utf-8")
+        self.binary_data = bytes(buffer[body_start:terminator])
+        try:
+            self.data = self.binary_data.decode("utf-8")
+        except UnicodeDecodeError:
+            self.data = None
+
         self._calculate_checksum()
         self.checksum_ok = self.checksum == received_checksum
 
@@ -95,19 +124,19 @@ class GDBBinaryPacket(GDBPacket):
 
     def __init__(self, binary_data: Union[bytes, bytearray]):
         super().__init__()
-        self._binary_data = binary_data
-        self.checksum = _mod_256_checksum(self._binary_data)
+        self.binary_data = binary_data
+        self.checksum = _mod_256_checksum(self.binary_data)
         self.checksum_ok = True
 
     def __str__(self):
         ret = f"{self.__class__.__name__}"
         if self.data:
-            ret += f" <checksum: {'ok' if self.checksum_ok else 'bad'}> {self._binary_data.hex()}"
+            ret += f" <checksum: {'ok' if self.checksum_ok else 'bad'}> {self.binary_data.hex()}"
 
         return ret
 
     def _serialize(self) -> bytes:
-        escaped_data = self._binary_data
+        escaped_data = self.binary_data
         for key, value in self._ESCAPE_MAP.items():
             escaped_data = escaped_data.replace(
                 bytes(key, "utf-8"), bytes(value, "utf-8")

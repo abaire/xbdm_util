@@ -9,6 +9,7 @@ from __future__ import annotations
 import collections
 import logging
 import socket
+from typing import Any
 from typing import Callable
 from typing import Dict
 from typing import List
@@ -35,6 +36,13 @@ class GDBTransport(ip_transport.IPTransport):
     TID_ANY_THREAD = 0
 
     ERR_RETRIEVAL_FAILED = 0xD0
+
+    # Breakpoint types
+    BP_SOFTWARE = 0
+    BP_HARDWARE = 1
+    BP_WRITE = 2
+    BP_READ = 3
+    BP_ACCESS = 4
 
     ORDERED_REGISTERS = [
         "Ebp",
@@ -207,15 +215,15 @@ class GDBTransport(ip_transport.IPTransport):
 
     def _process_packet(self, pkt: GDBPacket):
         """Dispatches the given packet to the appropriate handler."""
-        if len(pkt.data) > 1:
-            command_id = pkt.data[:2]
+        command_id = pkt.get_leading_string(2)
+        if command_id is not None:
             handler = self._dispatch_table.get(command_id)
             if handler:
                 handler(pkt)
                 return
 
-        if pkt.data:
-            command_id = pkt.data[0]
+        command_id = pkt.get_leading_string(1)
+        if command_id is not None:
             handler = self._dispatch_table.get(command_id)
             if handler:
                 handler(pkt)
@@ -259,8 +267,8 @@ class GDBTransport(ip_transport.IPTransport):
             "T": target._handle_check_thread_alive,
             "v": target._handle_extended_v_command,
             "X": target._handle_write_memory_binary,
-            "z": target._handle_insert_breakpoint_type,
-            "Z": target._handle_remove_breakpoint_type,
+            "z": target._handle_remove_breakpoint_type,
+            "Z": target._handle_insert_breakpoint_type,
         }
 
     def _handle_enable_extended_mode(self, pkt: GDBPacket):
@@ -351,7 +359,7 @@ class GDBTransport(ip_transport.IPTransport):
         op = pkt.data[1]
         thread_id = int(pkt.data[2:], 16)
         self._command_thread_id_context[op] = thread_id
-        self.send_packet(GDBPacket("OK"))
+        self._send_ok()
 
     def _handle_step_instruction(self, pkt: GDBPacket):
         logger.error(f"Unsupported packet {pkt.data}")
@@ -459,16 +467,136 @@ class GDBTransport(ip_transport.IPTransport):
         self.send_packet(GDBPacket())
 
     def _handle_write_memory_binary(self, pkt: GDBPacket):
-        logger.error(f"Unsupported packet {pkt.data}")
-        self.send_packet(GDBPacket())
+        place, data = pkt.binary_data[1:].split(b":")
+
+        place = place.decode("utf-8")
+        addr, length = place.split(",")
+        addr = int(addr, 16)
+        length = int(length, 16)
+
+        if not length:
+            self._send_ok()
+            return
+
+        logger.error(f"TODO: WRITE MEM AT {addr}")
+        self._send_error(1)
+
+    @staticmethod
+    def _extract_breakpoint_command_params(
+        pkt: GDBPacket,
+    ) -> Tuple[int, int, Any, Optional[List]]:
+        elements = pkt.data[1:].split(";")
+
+        type, addr, kind = elements[0].split(",")
+        type = int(type)
+        addr = int(addr, 16)
+        args = None
+        if len(elements) > 1:
+            args = elements[1:]
+
+        return type, addr, kind, args
 
     def _handle_insert_breakpoint_type(self, pkt: GDBPacket):
+        type, addr, kind, args = self._extract_breakpoint_command_params(pkt)
+
+        if type == self.BP_SOFTWARE:
+            self._handle_insert_software_breakpoint(addr, kind, args)
+            return
+
+        if type == self.BP_HARDWARE:
+            self._handle_insert_hardware_breakpoint(addr, kind, args)
+            return
+
+        if type == self.BP_WRITE:
+            self._handle_insert_write_breakpoint(addr, kind)
+            return
+
+        if type == self.BP_READ:
+            self._handle_insert_read_breakpoint(addr, kind)
+            return
+
+        if type == self.BP_ACCESS:
+            self._handle_insert_access_breakpoint(addr, kind)
+            return
+
+        logger.error(f"Unsupported packet {pkt.data}")
+        self._send_empty()
+
+    def _handle_insert_software_breakpoint(self, addr, kind, args):
+        logger.error("TODO: IMPLEMENT _handle_insert_software_breakpoint")
+        # self.send_packet(GDBPacket("OK"))
+        self._send_empty()
+
+    def _handle_insert_hardware_breakpoint(self, addr, kind, args):
+        logger.error("TODO: IMPLEMENT _handle_insert_hardware_breakpoint")
+        # self.send_packet(GDBPacket("OK"))
+        self._send_empty()
+
+    def _handle_insert_write_breakpoint(self, addr, kind):
+        logger.error("TODO: IMPLEMENT _handle_insert_write_breakpoint")
+        # self.send_packet(GDBPacket("OK"))
+        self._send_empty()
+
+    def _handle_insert_read_breakpoint(self, addr, kind):
+        logger.error("TODO: IMPLEMENT _handle_insert_read_breakpoint")
+        # self.send_packet(GDBPacket("OK"))
+        self._send_empty()
+
+    def _handle_insert_access_breakpoint(self, addr, kind):
+        logger.error("TODO: IMPLEMENT _handle_insert_access_breakpoint")
+        # self.send_packet(GDBPacket("OK"))
+        self._send_empty()
+
+    def _handle_remove_breakpoint_type(self, pkt: GDBPacket):
+        type, addr, kind, _args = self._extract_breakpoint_command_params(pkt)
+
+        if type == self.BP_SOFTWARE:
+            self._handle_remove_software_breakpoint(addr, kind)
+            return
+
+        if type == self.BP_HARDWARE:
+            self._handle_remove_hardware_breakpoint(addr, kind)
+            return
+
+        if type == self.BP_WRITE:
+            self._handle_remove_write_breakpoint(addr, kind)
+            return
+
+        if type == self.BP_READ:
+            self._handle_remove_read_breakpoint(addr, kind)
+            return
+
+        if type == self.BP_ACCESS:
+            self._handle_remove_access_breakpoint(addr, kind)
+            return
+
         logger.error(f"Unsupported packet {pkt.data}")
         self.send_packet(GDBPacket())
 
-    def _handle_remove_breakpoint_type(self, pkt: GDBPacket):
-        logger.error(f"Unsupported packet {pkt.data}")
-        self.send_packet(GDBPacket())
+    def _handle_remove_software_breakpoint(self, addr, kind):
+        logger.error("TODO: IMPLEMENT _handle_remove_software_breakpoint")
+        # self.send_packet(GDBPacket("OK"))
+        self._send_empty()
+
+    def _handle_remove_hardware_breakpoint(self, addr, kind):
+        logger.error("TODO: IMPLEMENT _handle_remove_hardware_breakpoint")
+        # self.send_packet(GDBPacket("OK"))
+        self._send_empty()
+
+    def _handle_remove_write_breakpoint(self, addr, kind):
+        logger.error("TODO: IMPLEMENT _handle_remove_write_breakpoint")
+        # self.send_packet(GDBPacket("OK"))
+        self._send_empty()
+
+    def _handle_remove_read_breakpoint(self, addr, kind):
+        logger.error("TODO: IMPLEMENT _handle_remove_read_breakpoint")
+        # self.send_packet(GDBPacket("OK"))
+        self._send_empty()
+
+    def _handle_remove_access_breakpoint(self, addr, kind):
+        logger.error("TODO: IMPLEMENT _handle_remove_access_breakpoint")
+        # self.send_packet(GDBPacket("OK"))
+        self._send_empty()
 
     def _handle_query_attached(self, _pkt: GDBPacket):
         # If attached to an existing process:
@@ -510,7 +638,7 @@ class GDBTransport(ip_transport.IPTransport):
                 response.append("exec-events-")
                 continue
             if feature == "vContSupported+":
-                response.append("vContSupported-")
+                response.append("vContSupported+")
                 continue
             if feature == "QThreadEvents+":
                 response.append("QThreadEvents-")
@@ -612,6 +740,9 @@ class GDBTransport(ip_transport.IPTransport):
     def _send_empty(self):
         self.send_packet(GDBPacket())
 
+    def _send_ok(self):
+        self.send_packet(GDBPacket("OK"))
+
     def _send_error(self, error_number: int):
         self.send_packet(GDBPacket("E%02X" % error_number))
 
@@ -628,7 +759,7 @@ class GDBTransport(ip_transport.IPTransport):
 
     def _start_no_ack_mode(self):
         self.features["QStartNoAckMode+"] = True
-        self.send_packet(GDBPacket("OK"))
+        self._send_ok()
 
     def _get_thread_context_for_command(self, cmd):
         thread_id = self._command_thread_id_context.get(cmd, None)
