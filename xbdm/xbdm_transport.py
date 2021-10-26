@@ -7,8 +7,13 @@ from net import ip_transport
 from . import xbdm_notification_transport
 from . import rdcp_command
 from . import rdcp_response
+import util
 
 logger = logging.getLogger(__name__)
+
+logging.Logger.xbdm = util.register_colorized_logging_level(
+    "XBDM", util.ANSI_CYAN + util.ANSI_BRIGHT_WHITE_BACKGROUND
+)
 
 
 class XBDMTransport(ip_transport.IPTransport):
@@ -45,7 +50,7 @@ class XBDMTransport(ip_transport.IPTransport):
         self._state = self.STATE_CONNECTED
 
     def send_command(self, cmd: rdcp_command.RDCPCommand) -> bool:
-        logger.debug(f"Queueing RDCP command {cmd}")
+        logger.xbdm(f"Queueing RDCP command {cmd}")
         if self._state < self.STATE_CONNECTED:
             logger.error("Not connected")
             return False
@@ -63,7 +68,7 @@ class XBDMTransport(ip_transport.IPTransport):
         if self._state != self.STATE_CONNECTED or not self._command_queue:
             return
         bytes = self._command_queue[0].serialize()
-        logger.debug(f"Sending RDCP {bytes}")
+        # logger.xbdm(f"Sending RDCP {bytes}")
         self.send(bytes)
         self._state = self.STATE_AWAITING_RESPONSE
 
@@ -112,7 +117,7 @@ class XBDMTransport(ip_transport.IPTransport):
 
             current_command, bytes_processed = parse_response()
 
-        logger.debug(
+        logger.xbdm(
             f"After processing: [{len(transport.read_buffer)}] {transport.read_buffer}"
         )
 
@@ -128,7 +133,7 @@ class XBDMTransport(ip_transport.IPTransport):
 
     def _process_rdcp_command(self, response: rdcp_response.RDCPResponse) -> bool:
         """Processes a single RDCPResponse. Return True to close the connection"""
-        logger.debug(f"Processing RDCP command {response}")
+        logger.xbdm(f"Processing RDCP command {response}")
         if self._state == self.STATE_INIT:
             return self._process_connect_response(response)
         elif self._state == self.STATE_AWAITING_RESPONSE:
@@ -142,7 +147,7 @@ class XBDMTransport(ip_transport.IPTransport):
         ):
             return True
         self._state = self.STATE_CONNECTED
-        logger.debug(f"Connect response: {response.data.decode('utf-8')}")
+        logger.xbdm(f"Connect response: {response.data.decode('utf-8')}")
         return False
 
     def _process_command_response(self, response: rdcp_response.RDCPResponse) -> bool:

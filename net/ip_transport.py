@@ -43,9 +43,12 @@ class IPTransport:
         self._sock = sock
         self.addr = addr
 
-    def start(self):
-        """Perform transport-specific one-time startup."""
-        pass
+    def start(self) -> bool:
+        """Perform transport-specific one-time startup.
+
+        :returns True if startup was successful.
+        """
+        return True
 
     def close(self):
         if not self._sock:

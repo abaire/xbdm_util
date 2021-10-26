@@ -112,8 +112,13 @@ class XBDMBridgeRemoteServer(ip_transport.IPTransport):
             self._process_clients(clients)
 
     def _process_new_clients(self, new_clients: Set[ip_transport.IPTransport]):
+        failed = set()
         for new_client in new_clients:
-            new_client.start()
+            if not new_client.start():
+                failed.add(new_client)
+                new_client.close()
+
+        new_clients -= failed
 
         with self._client_lock:
             self._clients.update(new_clients)

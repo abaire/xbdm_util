@@ -23,10 +23,18 @@ from . import resources
 from .packet import GDBPacket
 from .packet import GDBBinaryPacket
 from net import ip_transport
+import util
 from xbdm import debugger
 from xbdm import xbdm_bridge
 
 logger = logging.getLogger(__name__)
+
+logging.Logger.gdb = util.register_colorized_logging_level(
+    "GDB", util.ANSI_BLUE + util.ANSI_BRIGHT_WHITE_BACKGROUND
+)
+logging.Logger.gdb_send = util.register_colorized_logging_level(
+    "<< GDB", util.ANSI_BLUE + util.ANSI_BRIGHT_WHITE_BACKGROUND + util.ANSI_UNDERLINE
+)
 
 
 class GDBTransport(ip_transport.IPTransport):
@@ -99,26 +107,29 @@ class GDBTransport(ip_transport.IPTransport):
         # Maps a command type to the thread id that should be used when interpreting that command.
         self._command_thread_id_context: Dict[str, int] = {}
 
-        self.features = {"QStartNoAckMode": False}
+        self.features: Dict[str, Any] = {"QStartNoAckMode": False}
         self._dispatch_table: Mapping[
             str, Callable[[GDBPacket], None]
         ] = self._build_dispatch_table(self)
 
         self._thread_info_buffer: List[int] = []
 
-    def start(self):
+    def _reset_features(self):
+        self.features = {"QStartNoAckMode": False}
+
+    def start(self) -> bool:
         connected = self._bridge.connect_xbdm()
-        assert connected
+        if not connected:
+            return False
 
         self._debugger = debugger.Debugger(self._bridge)
         self._debugger.attach()
         self._debugger.halt()
 
         thread = self._debugger.active_thread
-        if not thread:
-            return
-
-        self._send_thread_stop_packet(thread)
+        if thread:
+            self._send_thread_stop_packet(thread)
+        return True
 
     def close(self):
         if self._debugger:
@@ -142,7 +153,7 @@ class GDBTransport(ip_transport.IPTransport):
 
         pkt: GDBPacket = self._send_queue.popleft()
         data = pkt.serialize()
-        logger.debug(f"Sending GDB packet: {data.decode('utf-8')}")
+        logger.gdb_send(f"Sending GDB packet: {data.decode('utf-8')}")
         self.send(data)
 
     def _recv(self, data: bytes):
@@ -203,8 +214,8 @@ class GDBTransport(ip_transport.IPTransport):
                 break
             self.shift_read_buffer(bytes_consumed)
 
-            logger.debug(f"Processed packet {pkt}")
-            # logger.debug(
+            logger.gdb(f"Processed packet {pkt}")
+            # logger.gdb(
             #     f"After processing: [{len(self._read_buffer)}] {self._read_buffer.hex()}"
             # )
 
@@ -306,7 +317,7 @@ class GDBTransport(ip_transport.IPTransport):
         self.send_packet(GDBPacket())
 
     def _handle_deprecated_command(self, pkt: GDBPacket):
-        logger.debug(f"Ignoring deprecated command: {pkt.data}")
+        logger.gdb(f"Ignoring deprecated command: {pkt.data}")
         self.send_packet(GDBPacket())
 
     def _handle_detach(self, pkt: GDBPacket):
@@ -343,7 +354,7 @@ class GDBTransport(ip_transport.IPTransport):
             else:
                 str_value = fmt % socket.htonl(value)
 
-            # logger.debug(f"{register}: {str_value}")
+            # logger.gdb(f"{register}: {str_value}")
             body.append(str_value)
 
         self.send_packet(GDBPacket("".join(body)))
@@ -757,7 +768,7 @@ class GDBTransport(ip_transport.IPTransport):
             self._send_error(0)
             return
 
-        logger.debug(f"Read requested from {target_file} {start} - {end}")
+        logger.gdb(f"Read requested from {target_file} {start} - {end}")
         self._send_xfer_response(body, start, end)
 
     def _send_xfer_response(self, body: bytes, start: int, end: int):
