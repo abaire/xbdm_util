@@ -472,10 +472,6 @@ class GDBTransport(ip_transport.IPTransport):
         self.send_packet(GDBPacket())
 
     def _handle_extended_v_command(self, pkt: GDBPacket):
-        if pkt.data == "vMustReplyEmpty":
-            self._send_empty()
-            return
-
         if pkt.data == "vCont?":
             self._handle_vcont_query()
             return
@@ -484,8 +480,11 @@ class GDBTransport(ip_transport.IPTransport):
             self._handle_vcont(pkt.data[6:])
             return
 
-        logger.error(f"Unsupported v packet {pkt.data}")
-        self.send_packet(GDBPacket())
+        # Suppress error for vMustReplyEmpty, which intentionally follows the same
+        # handling as any other unsupported v packet.
+        if pkt.data != "vMustReplyEmpty":
+            logger.error(f"Unsupported v packet {pkt.data}")
+        self._send_empty()
 
     def _handle_write_memory_binary(self, pkt: GDBPacket):
         place, data = pkt.binary_data[1:].split(b":")
