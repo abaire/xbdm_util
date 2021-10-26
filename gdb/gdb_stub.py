@@ -463,6 +463,10 @@ class GDBTransport(ip_transport.IPTransport):
             self._handle_vcont_query()
             return
 
+        if pkt.data.startswith("vCont;"):
+            self._handle_vcont(pkt.data[6:])
+            return
+
         logger.error(f"Unsupported v packet {pkt.data}")
         self.send_packet(GDBPacket())
 
@@ -523,9 +527,10 @@ class GDBTransport(ip_transport.IPTransport):
         self._send_empty()
 
     def _handle_insert_software_breakpoint(self, addr, kind, args):
-        logger.error("TODO: IMPLEMENT _handle_insert_software_breakpoint")
-        # self.send_packet(GDBPacket("OK"))
-        self._send_empty()
+        logger.error(
+            f"TODO: IMPLEMENT _handle_insert_software_breakpoint {kind} {args}"
+        )
+        self._send_ok()
 
     def _handle_insert_hardware_breakpoint(self, addr, kind, args):
         logger.error("TODO: IMPLEMENT _handle_insert_hardware_breakpoint")
@@ -736,6 +741,14 @@ class GDBTransport(ip_transport.IPTransport):
         #  s - step
         #  S - step with signal
         self.send_packet(GDBPacket("vcont;c;C;s;S"))
+
+    def _handle_vcont(self, args: str):
+        if args == "c":
+            logger.warning("TODO: Check that continue_all actually works.")
+            self._debugger.continue_all()
+            self._send_ok()
+        logger.error("TODO: IMPLEMENT _handle_vcont")
+        self._send_error(1)
 
     def _send_empty(self):
         self.send_packet(GDBPacket())
