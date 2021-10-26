@@ -534,7 +534,7 @@ class GDBTransport(ip_transport.IPTransport):
             return
 
         if type == self.BP_HARDWARE:
-            self._handle_insert_hardware_breakpoint(addr, kind, args)
+            self._send_empty()
             return
 
         if type == self.BP_WRITE:
@@ -553,15 +553,15 @@ class GDBTransport(ip_transport.IPTransport):
         self._send_empty()
 
     def _handle_insert_software_breakpoint(self, addr, kind, args):
-        logger.error(
-            f"TODO: IMPLEMENT _handle_insert_software_breakpoint {kind} {args}"
-        )
-        self._send_ok()
-
-    def _handle_insert_hardware_breakpoint(self, addr, kind, args):
-        logger.error("TODO: IMPLEMENT _handle_insert_hardware_breakpoint")
-        # self.send_packet(GDBPacket("OK"))
-        self._send_empty()
+        if kind != 1 or args:
+            logger.warning(
+                f"Partially supported insert swbreak at 0x%X k: {kind} arg: {args}"
+                % addr
+            )
+        if self._debugger.add_breakpoint_at_address(addr):
+            self._send_ok()
+            return
+        self._send_error(errno.EBADE)
 
     def _handle_insert_write_breakpoint(self, addr, kind):
         logger.error("TODO: IMPLEMENT _handle_insert_write_breakpoint")
@@ -586,7 +586,7 @@ class GDBTransport(ip_transport.IPTransport):
             return
 
         if type == self.BP_HARDWARE:
-            self._handle_remove_hardware_breakpoint(addr, kind)
+            self._send_empty()
             return
 
         if type == self.BP_WRITE:
@@ -605,14 +605,10 @@ class GDBTransport(ip_transport.IPTransport):
         self.send_packet(GDBPacket())
 
     def _handle_remove_software_breakpoint(self, addr, kind):
-        logger.error("TODO: IMPLEMENT _handle_remove_software_breakpoint")
-        # self.send_packet(GDBPacket("OK"))
-        self._send_empty()
-
-    def _handle_remove_hardware_breakpoint(self, addr, kind):
-        logger.error("TODO: IMPLEMENT _handle_remove_hardware_breakpoint")
-        # self.send_packet(GDBPacket("OK"))
-        self._send_empty()
+        if kind != 1:
+            logger.warning(f"Remove swbreak at 0x%X with kind {kind}" % addr)
+        self._debugger.remove_breakpoint_at_address(addr)
+        self._send_ok()
 
     def _handle_remove_write_breakpoint(self, addr, kind):
         logger.error("TODO: IMPLEMENT _handle_remove_write_breakpoint")
@@ -653,8 +649,7 @@ class GDBTransport(ip_transport.IPTransport):
                 response.append("swbreak+")
                 continue
             if feature == "hwbreak+":
-                self.features["hwbreak"] = True
-                response.append("hwbreak+")
+                response.append("hwbreak-")
                 continue
             if feature == "qRelocInsn+":
                 response.append("qRelocInsn-")

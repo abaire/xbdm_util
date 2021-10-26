@@ -637,6 +637,16 @@ class Debugger(_XBDMClient):
         response = self._call(rdcp_command.SetMem(address, data))
         return response.ok
 
+    def add_breakpoint_at_address(self, address) -> bool:
+        """Adds a breakpoint at the given target address."""
+        response = self._call(rdcp_command.BreakAtAddress(address))
+        return response.ok
+
+    def remove_breakpoint_at_address(self, address) -> bool:
+        """Removes a breakpoint from the given target address."""
+        response = self._call(rdcp_command.BreakAtAddress(address, clear=True))
+        return response.ok
+
     def _restart_and_attach(self):
         response = self._call(
             rdcp_command.Reboot(
