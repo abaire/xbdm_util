@@ -16,6 +16,7 @@ from typing import Mapping
 from typing import Optional
 from typing import Tuple
 
+from . import resources
 from .packet import GDBPacket
 from .packet import GDBBinaryPacket
 from net import ip_transport
@@ -34,6 +35,50 @@ class GDBTransport(ip_transport.IPTransport):
     TID_ANY_THREAD = 0
 
     ERR_RETRIEVAL_FAILED = 0xD0
+
+    ORDERED_REGISTERS = [
+        "Ebp",
+        "Esp",
+        "Eip",
+        "EFlags",
+        "Eax",
+        "Ebx",
+        "Ecx",
+        "Edx",
+        "Esi",
+        "Edi",
+        "Cr0NpxState",
+        "ST0",
+        "ST1",
+        "ST2",
+        "ST3",
+        "ST4",
+        "ST5",
+        "ST6",
+        "ST7",
+    ]
+
+    REGISTER_FORMATTERS = {
+        "Ebp": r"%08x",
+        "Esp": r"%08x",
+        "Eip": r"%08x",
+        "EFlags": r"%08x",
+        "Eax": r"%08x",
+        "Ebx": r"%08x",
+        "Ecx": r"%08x",
+        "Edx": r"%08x",
+        "Esi": r"%08x",
+        "Edi": r"%08x",
+        "Cr0NpxState": r"%08x",
+        "ST0": r"%020x",
+        "ST1": r"%020x",
+        "ST2": r"%020x",
+        "ST3": r"%020x",
+        "ST4": r"%020x",
+        "ST5": r"%020x",
+        "ST6": r"%020x",
+        "ST7": r"%020x",
+    }
 
     def __init__(self, bridge: xbdm_bridge.XBDMBridge, name: str):
         super().__init__(process_callback=self._on_bytes_read, name=name)
@@ -275,12 +320,24 @@ class GDBTransport(ip_transport.IPTransport):
 
         thread = self._debugger.get_thread(thread_id)
 
-        context = thread.get_context()
+        context: debugger.Thread.FullContext = thread.get_full_context()
         if not context:
             self._send_error(self.ERR_RETRIEVAL_FAILED)
 
-        logger.error(f"Unsupported packet {pkt.data}")
-        self.send_packet(GDBPacket())
+        body = []
+        for register in self.ORDERED_REGISTERS:
+            value: Optional[int] = context.registers.get(register, None)
+            fmt = self.REGISTER_FORMATTERS[register]
+            if value is None:
+                dummy = fmt % 0
+                str_value = "?" * len(dummy)
+            else:
+                str_value = fmt % value
+
+            # logger.debug(f"{register}: {str_value}")
+            body.append(str_value)
+
+        self.send_packet(GDBPacket("".join(body)))
 
     def _handle_write_general_registers(self, pkt: GDBPacket):
         logger.error(f"Unsupported packet {pkt.data}")
@@ -506,17 +563,31 @@ class GDBTransport(ip_transport.IPTransport):
 
     def _handle_features_read(self, pkt: GDBPacket):
         target_file, region = pkt.data[pkt.data.index("read:") + 5 :].split(":")
-        start, end = region.split(",")
+        start, length = region.split(",")
         start = int(start, 16)
-        end = int(end, 16)
+        length = int(length, 16)
+        end = start + length
+
+        body = resources.RESOURCES.get(target_file)
+        if not body:
+            self._send_error(0)
+            return
 
         logger.debug(f"Read requested from {target_file} {start} - {end}")
+        self._send_xfer_response(body, start, end)
 
-        body = b"test"
-        self._send_xfer_response(body, True)
+    def _send_xfer_response(self, body: bytes, start: int, end: int):
+        body_size = len(body)
 
-    def _send_xfer_response(self, body: bytes, is_end_of_file: bool):
-        prefix = b"l" if is_end_of_file else b"m"
+        if start >= body_size:
+            self.send_packet(GDBPacket("l"))
+            return
+
+        prefix = b"l" if end >= body_size else b"m"
+        if end > body_size:
+            end = body_size
+        body = body[start:end]
+
         self.send_packet(GDBBinaryPacket(prefix + body))
 
     def _send_empty(self):

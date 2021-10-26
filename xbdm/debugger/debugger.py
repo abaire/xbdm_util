@@ -100,9 +100,11 @@ class Thread(_XBDMClient):
         ):
             super().__init__(registers)
 
-            self.ext_register_data = None
+            self.basic_registers = dict(self.registers)
+            self.ext_registers = None
             if ext_registers:
-                self.ext_register_data = _parse_ext_registers(ext_registers)
+                self.ext_registers = _parse_ext_registers(ext_registers)
+                self.registers.update(self.ext_registers)
 
     _TRAP_FLAG = 0x100
 

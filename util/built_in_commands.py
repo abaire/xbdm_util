@@ -216,7 +216,7 @@ def _print_thread_context(thread_id: int, info: Optional[Thread.Context]):
 
 
 def _print_thread_ext_context(thread_id: int, info: Optional[Thread.FullContext]):
-    if not info or not info.ext_register_data:
+    if not info or not info.ext_registers:
         print(f"Extended register information not available for thread {thread_id}")
         return
 
@@ -242,7 +242,7 @@ def _print_thread_ext_context(thread_id: int, info: Optional[Thread.FullContext]
 
     print(f"Extended context:")
     for key in context_keys:
-        value = info.ext_register_data.get(key, None)
+        value = info.ext_registers.get(key, None)
         if value is None:
             value = "???"
         else:
