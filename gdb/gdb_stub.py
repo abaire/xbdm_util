@@ -817,6 +817,8 @@ class GDBTransport(ip_transport.IPTransport):
             logger.warning("TODO: Check that continue_all actually works.")
             self._debugger.continue_all()
             self._send_ok()
+            return
+
         logger.error("TODO: IMPLEMENT _handle_vcont")
         self._send_error(1)
 
