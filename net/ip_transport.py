@@ -58,7 +58,11 @@ class IPTransport:
         else:
             logger.info(f"Closing connection to {self.addr}")
 
-        self._sock.shutdown(socket.SHUT_RDWR)
+        try:
+            self._sock.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            # Ignore exception if the socket is already disconnected.
+            pass
         self._sock.close()
         self._sock = None
         self._read_buffer.clear()
