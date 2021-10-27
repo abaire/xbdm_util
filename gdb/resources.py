@@ -1,18 +1,37 @@
 import socket
 from typing import Optional
 
+# Despite the type field it appears that ordering is critical for GDB's processing
+# (e.g., it always expects ESI to be register 8.
 ORDERED_REGISTERS = [
-    "Ebp",
-    "Esp",
-    "Eip",
-    "EFlags",  # 3
     "Eax",
-    "Ebx",
     "Ecx",
     "Edx",
+    "Ebx",
+    "Esp",
+    "Ebp",
     "Esi",
     "Edi",
-    "Cr0NpxState",  # 10
+    "Eip",
+    "EFlags",
+    "cs",
+    "ss",
+    "ds",
+    "es",
+    "fs",
+    "gs",
+    "ss_base",
+    "ds_base",
+    "es_base",
+    "fs_base",
+    "gs_base",
+    "k_gs_base",
+    "cr0",
+    "cr2",
+    "cr3",
+    "cr4",
+    "cr8",
+    "efer",
     "ST0",
     "ST1",
     "ST2",
@@ -21,6 +40,14 @@ ORDERED_REGISTERS = [
     "ST5",
     "ST6",
     "ST7",
+    "fctrl",
+    "fstat",
+    "ftag",
+    "fiseg",
+    "fioff",
+    "foseg",
+    "fooff",
+    "fop",
 ]
 
 REGISTER_INFO = {
@@ -51,6 +78,24 @@ REGISTER_INFO = {
     "foseg": (4, "int", "float"),
     "fooff": (4, "int", "float"),
     "fop": (4, "int", "float"),
+    "cs": (4, "int32"),
+    "ss": (4, "int32"),
+    "ds": (4, "int32"),
+    "es": (4, "int32"),
+    "fs": (4, "int32"),
+    "gs": (4, "int32"),
+    "ss_base": (4, "int32"),
+    "ds_base": (4, "int32"),
+    "es_base": (4, "int32"),
+    "fs_base": (4, "int32"),
+    "gs_base": (4, "int32"),
+    "k_gs_base": (4, "int32"),
+    "cr0": (4, "int32"),
+    "cr2": (4, "int32"),
+    "cr3": (4, "int32"),
+    "cr4": (4, "int32"),
+    "cr8": (4, "int32"),
+    "efer": (4, "int32"),
 }
 
 
@@ -130,7 +175,7 @@ def format_register_str(register: str, value: Optional[int]) -> str:
     bytesize = REGISTER_INFO[register][0]
 
     if value is None:
-        return "?" * (2 * bytesize)
+        return "x" * (2 * bytesize)
 
     if bytesize == 4:
         return "%08x" % socket.htonl(value)

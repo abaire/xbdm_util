@@ -430,6 +430,86 @@ class DefaultNotificationHandler(NotificationHandler):
         print("BREAK: %d @ 0x%X %s" % (thread_id, address, reason))
 
 
+class RedirectingNotificationHandler(NotificationHandler):
+    """Redirects notifications to callbacks passed in init."""
+
+    def __init__(
+        self,
+        on_debugstr=None,
+        on_vx=None,
+        on_module_load=None,
+        on_section_load=None,
+        on_create_thread=None,
+        on_execution_state_change=None,
+        on_breakpoint=None,
+    ):
+        super().__init__()
+
+        def default_debugstr(_tid, _text):
+            pass
+
+        self.on_debugstr = on_debugstr if on_debugstr else default_debugstr
+
+        def default_vx(_message):
+            pass
+
+        self.on_vx = on_vx if on_vx else default_vx
+
+        def default_module_load(_mod):
+            pass
+
+        self.on_module_load = on_module_load if on_module_load else default_module_load
+
+        def default_section_load(_sect):
+            pass
+
+        self.on_section_load = (
+            on_section_load if on_section_load else default_section_load
+        )
+
+        def default_create_thread(_thread_id, _start_address):
+            pass
+
+        self.on_create_thread = (
+            on_create_thread if on_create_thread else default_create_thread
+        )
+
+        def default_execution_state_change(_new_state):
+            pass
+
+        self.on_execution_state_change = (
+            on_execution_state_change
+            if on_execution_state_change
+            else default_execution_state_change
+        )
+
+        def default_breakpoint(_thread_id, _address, _reason):
+            pass
+
+        self.on_breakpoint = on_breakpoint if on_breakpoint else default_breakpoint
+
+    def debugstr(self, thread_id: int, text: str):
+        self.on_debugstr(thread_id, text)
+
+    def vx(self, message: str):
+        self.on_vx(message)
+
+    def module_load(self, mod: Module):
+        self.on_module_load(mod)
+
+    def section_load(self, sect: Section):
+        self.on_section_load(sect)
+
+    def create_thread(self, thread_id: int, start_address: int):
+        self.create_thread(thread_id, start_address)
+
+    def execution_state_change(self, new_state: str):
+        self.execution_state_change(new_state)
+
+    def breakpoint(self, thread_id: int, address: int, reason: str):
+        self.breakpoint(thread_id, address, reason)
+
+
 class Debugger(_XBDMClient):
     """Provides high level debugger functionality."""
 

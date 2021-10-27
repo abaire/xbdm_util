@@ -90,7 +90,11 @@ class GDBTransport(ip_transport.IPTransport):
             logger.error("Failed to connect to XBDM")
             return False
 
-        self._debugger = debugger.Debugger(self._bridge)
+        handler = debugger.RedirectingNotificationHandler(
+            on_execution_state_change=self._on_execution_state_change,
+            on_breakpoint=self._on_breakpoint,
+        )
+        self._debugger = debugger.Debugger(self._bridge, notification_handler=handler)
         self._debugger.attach()
         self._debugger.halt()
 
@@ -820,6 +824,12 @@ class GDBTransport(ip_transport.IPTransport):
             )
             thread_id = self.TID_ANY_THREAD
         return thread_id
+
+    def _on_execution_state_change(self, new_state: str):
+        print(f"EXECUTION STATE CHANGE: {new_state}")
+
+    def _on_breakpoint(self, thread_id: int, address: int, reason: str):
+        print("BREAK: %d @ 0x%X %s" % (thread_id, address, reason))
 
 
 def _handle_build_command(
