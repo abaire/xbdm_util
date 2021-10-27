@@ -151,7 +151,8 @@ class Thread(_XBDMClient):
 
     def get_info(self):
         response = self._call(rdcp_command.ThreadInfo(self.thread_id))
-        assert response.ok
+        if not response.ok:
+            raise ConnectionResetError()
 
         self.suspend_count = response.suspend
         self.priority = response.priority
@@ -1008,10 +1009,17 @@ class Debugger(_XBDMClient):
             )
             return
 
-        thread = Thread(thread_id, self._connection)
-        self._threads[thread_id] = thread
-        thread.get_info()
-        self._notification_handler.create_thread(thread_id, thread.start_addr)
+        try:
+            thread = Thread(thread_id, self._connection)
+            self._threads[thread_id] = thread
+            thread.get_info()
+            self._notification_handler.create_thread(thread_id, thread.start_addr)
+        except ConnectionResetError:
+            # Assume that a reconnect will be performed and will fetch the thread info.
+            logger.info(
+                f"Suppressing create thread({thread_id}) notification as control channel is not up yet."
+            )
+            return
 
     def _process_terminate_thread(self, message):
         match = re.match(_match_hex("thread"), message)
