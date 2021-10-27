@@ -916,7 +916,6 @@ class Debugger(_XBDMClient):
         self._debugstr_accumulator[thread_id] = ""
         text = previous_buffer + text
 
-        print("DBG[%03d]> %s" % (thread_id, text))
         self._notification_handler.debugstr(thread_id, text)
 
     def _process_modload(self, message):
@@ -966,7 +965,6 @@ class Debugger(_XBDMClient):
             self._module_table.clear()
             self._section_table.clear()
             return
-        print(f"EXECUTION STATE CHANGE: {message}")
         # rebooting
         # pending
         # started

@@ -98,7 +98,7 @@ def _cmd_debugger_launch(shell, args: [str]) -> Result:
         command_line = None
 
     debugger: Debugger = shell._debugger
-    debugger.debug_xbe(args[0], command_line=command_line)
+    debugger.debug_xbe(args[0], command_line=command_line, persist=True)
     return Result.HANDLED
 
 
