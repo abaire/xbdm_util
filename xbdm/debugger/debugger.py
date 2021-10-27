@@ -383,25 +383,28 @@ class Section:
 class NotificationHandler:
     """Handles asynchronous notifications from XBDM."""
 
-    def debugstr(self, thread_id: int, text: str):
+    def debugstr(self, _thread_id: int, _text: str):
         pass
 
-    def vx(self, message: str):
+    def vx(self, _message: str):
         pass
 
-    def module_load(self, mod: Module):
+    def module_load(self, _mod: Module):
         pass
 
-    def section_load(self, sect: Section):
+    def section_load(self, _sect: Section):
         pass
 
-    def create_thread(self, thread_id: int, start_address: int):
+    def create_thread(self, _thread_id: int, _start_address: int):
         pass
 
-    def execution_state_change(self, new_state: str):
+    def terminate_thread(self, _thread_id: int):
         pass
 
-    def breakpoint(self, thread_id: int, address: int, reason: str):
+    def execution_state_change(self, _new_state: str):
+        pass
+
+    def breakpoint(self, _thread_id: int, _address: int, _reason: str):
         pass
 
 
@@ -423,6 +426,9 @@ class DefaultNotificationHandler(NotificationHandler):
     def create_thread(self, thread_id: int, start_address: int):
         print(f"Created thread: {thread_id} start_addr: 0x%08X" % start_address)
 
+    def terminate_thread(self, thread_id: int):
+        print(f"Terminate thread: {thread_id}")
+
     def execution_state_change(self, new_state: str):
         print(f"EXECUTION STATE CHANGE: {new_state}")
 
@@ -440,53 +446,29 @@ class RedirectingNotificationHandler(NotificationHandler):
         on_module_load=None,
         on_section_load=None,
         on_create_thread=None,
+        on_terminate_thread=None,
         on_execution_state_change=None,
         on_breakpoint=None,
     ):
         super().__init__()
 
-        def default_debugstr(_tid, _text):
+        def default_handler(*args):
             pass
 
-        self.on_debugstr = on_debugstr if on_debugstr else default_debugstr
-
-        def default_vx(_message):
-            pass
-
-        self.on_vx = on_vx if on_vx else default_vx
-
-        def default_module_load(_mod):
-            pass
-
-        self.on_module_load = on_module_load if on_module_load else default_module_load
-
-        def default_section_load(_sect):
-            pass
-
-        self.on_section_load = (
-            on_section_load if on_section_load else default_section_load
-        )
-
-        def default_create_thread(_thread_id, _start_address):
-            pass
-
+        self.on_debugstr = on_debugstr if on_debugstr else default_handler
+        self.on_vx = on_vx if on_vx else default_handler
+        self.on_module_load = on_module_load if on_module_load else default_handler
+        self.on_section_load = on_section_load if on_section_load else default_handler
         self.on_create_thread = (
-            on_create_thread if on_create_thread else default_create_thread
+            on_create_thread if on_create_thread else default_handler
         )
-
-        def default_execution_state_change(_new_state):
-            pass
-
+        self.on_terminate_thread = (
+            on_terminate_thread if on_terminate_thread else default_handler
+        )
         self.on_execution_state_change = (
-            on_execution_state_change
-            if on_execution_state_change
-            else default_execution_state_change
+            on_execution_state_change if on_execution_state_change else default_handler
         )
-
-        def default_breakpoint(_thread_id, _address, _reason):
-            pass
-
-        self.on_breakpoint = on_breakpoint if on_breakpoint else default_breakpoint
+        self.on_breakpoint = on_breakpoint if on_breakpoint else default_handler
 
     def debugstr(self, thread_id: int, text: str):
         self.on_debugstr(thread_id, text)
@@ -502,6 +484,9 @@ class RedirectingNotificationHandler(NotificationHandler):
 
     def create_thread(self, thread_id: int, start_address: int):
         self.create_thread(thread_id, start_address)
+
+    def terminate_thread(self, thread_id: int):
+        self.terminate_thread(thread_id)
 
     def execution_state_change(self, new_state: str):
         self.execution_state_change(new_state)
@@ -815,7 +800,9 @@ class Debugger(_XBDMClient):
     def _restart_and_attach(self):
         response = self._call(
             rdcp_command.Reboot(
-                rdcp_command.Reboot.FLAG_STOP | rdcp_command.Reboot.FLAG_WAIT
+                rdcp_command.Reboot.FLAG_STOP
+                | rdcp_command.Reboot.FLAG_WAIT
+                | rdcp_command.Reboot.FLAG_WARM
             )
         )
         assert response.ok
@@ -870,6 +857,7 @@ class Debugger(_XBDMClient):
             "modload ": self._process_modload,
             "sectload ": self._process_sectload,
             "create ": self._process_create_thread,
+            "terminate ": self._process_terminate_thread,
             "execution ": self._process_execution_state_change,
             "break ": self._process_break,
         }
@@ -948,8 +936,6 @@ class Debugger(_XBDMClient):
         self._notification_handler.section_load(sect)
 
     def _process_create_thread(self, message):
-        print(f"CREATE_THREAD: {message}")
-
         match = re.match(_match_hex("thread"), message)
         if not match:
             logger.error(f"FAILED TO MATCH CREATE: {message}")
@@ -960,6 +946,16 @@ class Debugger(_XBDMClient):
         self._threads[thread_id] = thread
         thread.get_info()
         self._notification_handler.create_thread(thread_id, thread.start_addr)
+
+    def _process_terminate_thread(self, message):
+        match = re.match(_match_hex("thread"), message)
+        if not match:
+            logger.error(f"FAILED TO MATCH CREATE: {message}")
+            return
+
+        thread_id = int(match.group(1), 0)
+        self._threads.pop(thread_id)
+        self._notification_handler.terminate_thread(thread_id)
 
     def _process_execution_state_change(self, message):
         self._last_xbdm_execution_state = message
