@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 class XBDMNotificationServer(ip_transport.IPTransport):
     """Creates a listener that will accept XBDMNotificationTransport connections."""
 
+    CONNECTED_NOTIFICATION = "!!BRIDGE!!NotificationChannelConnected"
+
     def __init__(
         self,
         addr: Tuple[str, int],
@@ -57,6 +59,9 @@ class XBDMNotificationServer(ip_transport.IPTransport):
             )
             self._add_sub_connection(transport)
             logger.debug(f"Accepted notification channel from {remote_addr}")
+            # Let the handler know that the connection has been established.
+            if self._handler:
+                self._handler(self.CONNECTED_NOTIFICATION)
 
         return True
 

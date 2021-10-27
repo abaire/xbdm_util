@@ -13,6 +13,7 @@ import time
 
 from xbdm import rdcp_command
 from xbdm.xbdm_bridge import XBDMBridge
+from xbdm.xbdm_notification_server import XBDMNotificationServer
 
 from typing import Callable
 from typing import Dict
@@ -620,6 +621,11 @@ class Debugger(_XBDMClient):
 
         self._restart_and_attach()
 
+    def clear_debug_xbe(self) -> bool:
+        """Clears the previously persisted debug target XBE."""
+        response = self._call(rdcp_command.LoadOnBootTitleUnpersist())
+        return response.ok
+
     def restart(self):
         """Reboots the current XBE and breaks at the entry address."""
         self._restart_and_attach()
@@ -843,6 +849,7 @@ class Debugger(_XBDMClient):
                 )
                 return
 
+        self.refresh_thread_info()
         self._connection.send_command(rdcp_command.Debugger())
 
         # Set a breakpoint at the entry to the program and continue forward
@@ -885,6 +892,10 @@ class Debugger(_XBDMClient):
                 message = self._notification_queue.pop()
 
             handled = False
+            if message == XBDMNotificationServer.CONNECTED_NOTIFICATION:
+                self._hello_received = True
+                continue
+
             for key, handler in self._notification_dispatch.items():
                 if message.startswith(key):
                     handler(message[len(key) :])
@@ -941,6 +952,12 @@ class Debugger(_XBDMClient):
             return
 
         thread_id = int(match.group(1), 0)
+        if not self._connection.can_process_xbdm_commands:
+            logger.info(
+                f"Suppressing create thread({thread_id}) notification as control channel is not up yet."
+            )
+            return
+
         thread = Thread(thread_id, self._connection)
         self._threads[thread_id] = thread
         thread.get_info()

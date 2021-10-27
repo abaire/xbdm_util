@@ -102,6 +102,20 @@ def _cmd_debugger_launch(shell, args: [str]) -> Result:
     return Result.HANDLED
 
 
+def _cmd_debugger_clear_launch_target(shell, _args: [str]) -> Result:
+    """
+
+    Clears any previously set /launch target.
+    """
+    if not shell._debugger:
+        print("ERROR: /attach debugger first.")
+        return Result.HANDLED
+
+    debugger: Debugger = shell._debugger
+    debugger.clear_debug_xbe()
+    return Result.HANDLED
+
+
 def _cmd_debugger_attach(shell, _args: [str]) -> Result:
     """
 
@@ -479,6 +493,7 @@ DISPATCH_TABLE = {
     "reconnect": _cmd_reconnect,
     "raw": _cmd_send_raw,
     "/launch": _cmd_debugger_launch,
+    "/clear": _cmd_debugger_clear_launch_target,
     "/attach": _cmd_debugger_attach,
     "/restart": _cmd_debugger_restart,
     "/switch": _cmd_debugger_set_active_thread,

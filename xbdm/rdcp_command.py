@@ -129,7 +129,7 @@ class RDCPCommand:
     """Models a Remote Debugging and Control Protocol command."""
 
     TERMINATOR = b"\r\n"
-    STR_BODY_CUTOFF = 32
+    STR_BODY_CUTOFF = 128
 
     def __init__(
         self,
