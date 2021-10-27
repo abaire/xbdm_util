@@ -64,50 +64,6 @@ class GDBTransport(ip_transport.IPTransport):
     BP_READ = 3
     BP_ACCESS = 4
 
-    ORDERED_REGISTERS = [
-        "Ebp",
-        "Esp",
-        "Eip",
-        "EFlags",
-        "Eax",
-        "Ebx",
-        "Ecx",
-        "Edx",
-        "Esi",
-        "Edi",
-        "Cr0NpxState",
-        "ST0",
-        "ST1",
-        "ST2",
-        "ST3",
-        "ST4",
-        "ST5",
-        "ST6",
-        "ST7",
-    ]
-
-    REGISTER_FORMATTERS = {
-        "Ebp": r"%08x",
-        "Esp": r"%08x",
-        "Eip": r"%08x",
-        "EFlags": r"%08x",
-        "Eax": r"%08x",
-        "Ebx": r"%08x",
-        "Ecx": r"%08x",
-        "Edx": r"%08x",
-        "Esi": r"%08x",
-        "Edi": r"%08x",
-        "Cr0NpxState": r"%08x",
-        "ST0": r"%020x",
-        "ST1": r"%020x",
-        "ST2": r"%020x",
-        "ST3": r"%020x",
-        "ST4": r"%020x",
-        "ST5": r"%020x",
-        "ST6": r"%020x",
-        "ST7": r"%020x",
-    }
-
     def __init__(self, bridge: xbdm_bridge.XBDMBridge, name: str):
         super().__init__(process_callback=self._on_bytes_read, name=name)
         self._state = self.STATE_INIT
@@ -372,14 +328,9 @@ class GDBTransport(ip_transport.IPTransport):
         logger.info(f"Registers:\n{reg_info}\n")
 
         body = []
-        for register in self.ORDERED_REGISTERS:
+        for register in resources.ORDERED_REGISTERS:
             value: Optional[int] = context.registers.get(register, None)
-            fmt = self.REGISTER_FORMATTERS[register]
-            if value is None:
-                dummy = fmt % 0
-                str_value = "?" * len(dummy)
-            else:
-                str_value = fmt % socket.htonl(value)
+            str_value = resources.format_register_str(register, value)
 
             # logger.gdb(f"{register}: {str_value}")
             body.append(str_value)

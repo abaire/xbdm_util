@@ -783,15 +783,16 @@ class GetContext(ProcessedCommand):
     ):
         super().__init__("getcontext", response_class=self.Response, handler=handler)
         flags = []
-        if enable_control and enable_integer and enable_float:
-            flags.append("full")
-        else:
-            if enable_control:
-                flags.append("control")
-            if enable_integer:
-                flags.append("int")
-            if enable_float:
-                flags.append("fp")
+        # There appears to be a bug where 'full' doesn't return Cr0NpxState.
+        # if enable_control and enable_integer and enable_float:
+        #     flags.append("full")
+        # else:
+        if enable_control:
+            flags.append("control")
+        if enable_integer:
+            flags.append("int")
+        if enable_float:
+            flags.append("fp")
         if not flags:
             flags = ""
         else:

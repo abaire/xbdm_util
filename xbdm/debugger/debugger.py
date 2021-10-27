@@ -39,14 +39,14 @@ def _parse_ext_registers(info: bytes) -> Dict[str, int]:
     cr0NpxState = struct.unpack_from("I", info, offset)[0]
 
     ext_info = {
-        "control": control,
-        "status": status,
-        "tag": tag,
-        "error_offset": error_offset,
-        "error_selector": error_selector,
-        "data_offset": data_offset,
-        "data_selector": data_selector,
-        "Cr0NpxState": cr0NpxState,
+        "fctrl": control,
+        "fstat": status,
+        "ftag": tag,
+        "fiseg": error_offset,
+        "fioff": error_selector,
+        "foseg": data_offset,
+        "fooff": data_selector,
+        "fop": cr0NpxState,
     }
 
     # Unpack ST0 - ST7
@@ -380,14 +380,71 @@ class Section:
         )
 
 
+class NotificationHandler:
+    """Handles asynchronous notifications from XBDM."""
+
+    def debugstr(self, thread_id: int, text: str):
+        pass
+
+    def vx(self, message: str):
+        pass
+
+    def module_load(self, mod: Module):
+        pass
+
+    def section_load(self, sect: Section):
+        pass
+
+    def create_thread(self, thread_id: int, start_address: int):
+        pass
+
+    def execution_state_change(self, new_state: str):
+        pass
+
+    def breakpoint(self, thread_id: int, address: int, reason: str):
+        pass
+
+
+class DefaultNotificationHandler(NotificationHandler):
+    """Default notification handler that just prints to the console."""
+
+    def debugstr(self, thread_id: int, text: str):
+        print("DBG[%03d]> %s" % (thread_id, text))
+
+    def vx(self, message: str):
+        print(f"vx: {message}")
+
+    def module_load(self, mod: Module):
+        print(f"Loaded module: {mod}")
+
+    def section_load(self, sect: Section):
+        print(f"Loaded section: {sect}")
+
+    def create_thread(self, thread_id: int, start_address: int):
+        print(f"Created thread: {thread_id} start_addr: 0x%08X" % start_address)
+
+    def execution_state_change(self, new_state: str):
+        print(f"EXECUTION STATE CHANGE: {new_state}")
+
+    def breakpoint(self, thread_id: int, address: int, reason: str):
+        print("BREAK: %d @ 0x%X %s" % (thread_id, address, reason))
+
+
 class Debugger(_XBDMClient):
     """Provides high level debugger functionality."""
 
-    def __init__(self, connection: XBDMBridge):
+    def __init__(
+        self,
+        connection: XBDMBridge,
+        notification_handler: Optional[NotificationHandler] = None,
+    ):
         super().__init__(connection)
         self._debug_port = None
 
-        self._notification_handler_map = self._build_notification_handler_map()
+        self._notification_dispatch = self._build_notification_dispatch()
+        self._notification_handler: NotificationHandler = notification_handler
+        if not self._notification_handler:
+            self._notification_handler = DefaultNotificationHandler()
 
         self._debugstr_re = re.compile(r"thread=(\d+)\s+(cr|lf|crlf)?\s+string=(.+)")
         self._debugstr_accumulator = collections.defaultdict(str)
@@ -726,7 +783,7 @@ class Debugger(_XBDMClient):
         self._connection.send_command(rdcp_command.BreakAtStart())
         self._connection.send_command(rdcp_command.Go())
 
-    def _build_notification_handler_map(self) -> Dict[str, Callable[[str], None]]:
+    def _build_notification_dispatch(self) -> Dict[str, Callable[[str], None]]:
         return {
             "vx!": self._process_vx,
             "debugstr ": self._process_debugstr,
@@ -760,7 +817,7 @@ class Debugger(_XBDMClient):
                 message = self._notification_queue.pop()
 
             handled = False
-            for key, handler in self._notification_handler_map.items():
+            for key, handler in self._notification_dispatch.items():
                 if message.startswith(key):
                     handler(message[len(key) :])
                     handled = True
@@ -769,9 +826,9 @@ class Debugger(_XBDMClient):
                 logger.warning(f"UNHANDLED DEBUGGER NOTIFICATION: '{message}'")
 
     def _process_vx(self, message):
-        print(f"VX: {message}")
         # 'event <Event Id="Xbe" Time="0x01d7c7c10fe720e0" Severity="1" TCR="" Description="\Device\Harddisk0\Partition2\xshell.xbe"/>'
         # 'event <Event Id="Xtl" Time="0x01d7c7c10fe7e430" Severity="1" TCR="" Description="XTL imports resolved"/>'
+        self._notification_handler.vx(message)
 
     def _process_debugstr(self, message):
         match = self._debugstr_re.match(message)
@@ -792,6 +849,7 @@ class Debugger(_XBDMClient):
         text = previous_buffer + text
 
         print("DBG[%03d]> %s" % (thread_id, text))
+        self._notification_handler.debugstr(thread_id, text)
 
     def _process_modload(self, message):
         mod = Module.parse(message)
@@ -799,6 +857,7 @@ class Debugger(_XBDMClient):
             logger.error(f"FAILED TO MATCH MODLOAD: {message}")
             return
         self._module_table[mod.name] = mod
+        self._notification_handler.module_load(mod)
 
     def _process_sectload(self, message):
         sect = Section.parse(message)
@@ -806,6 +865,7 @@ class Debugger(_XBDMClient):
             logger.error(f"FAILED TO MATCH SECTLOAD: {message}")
             return
         self._section_table[sect.index] = sect
+        self._notification_handler.section_load(sect)
 
     def _process_create_thread(self, message):
         print(f"CREATE_THREAD: {message}")
@@ -819,6 +879,7 @@ class Debugger(_XBDMClient):
         thread = Thread(thread_id, self._connection)
         self._threads[thread_id] = thread
         thread.get_info()
+        self._notification_handler.create_thread(thread_id, thread.start_addr)
 
     def _process_execution_state_change(self, message):
         self._last_xbdm_execution_state = message
@@ -834,6 +895,7 @@ class Debugger(_XBDMClient):
         # pending
         # started
         # stopped
+        self._notification_handler.execution_state_change(message)
 
     _BREAK_RE = re.compile(
         r"\s+".join([_match_hex(x) for x in ["addr", "thread"]]) + "\s+(.+)"
@@ -859,3 +921,4 @@ class Debugger(_XBDMClient):
         self._active_thread_id = thread_id
 
         logger.debug("!!! BREAK !!! %d @ 0x%X %s" % (thread_id, address, reason))
+        self._notification_handler.breakpoint(thread_id, address, reason)
