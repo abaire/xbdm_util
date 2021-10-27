@@ -408,6 +408,19 @@ class NotificationHandler:
     def breakpoint(self, _thread_id: int, _address: int, _reason: str):
         pass
 
+    def data_breakpoint(
+        self,
+        _thread_id: int,
+        _access: str,
+        _access_address: int,
+        _address: int,
+        _reason: str,
+    ):
+        pass
+
+    def step(self, _thread_id: int, _address: int):
+        pass
+
 
 class DefaultNotificationHandler(NotificationHandler):
     """Default notification handler that just prints to the console."""
@@ -436,6 +449,22 @@ class DefaultNotificationHandler(NotificationHandler):
     def breakpoint(self, thread_id: int, address: int, reason: str):
         print("BREAK: %d @ 0x%X %s" % (thread_id, address, reason))
 
+    def data_breakpoint(
+        self,
+        thread_id: int,
+        access: str,
+        access_address: int,
+        address: int,
+        reason: str,
+    ):
+        print(
+            "DATA BREAK: %d: %s@0x%08X @ 0x%X %s"
+            % (thread_id, access, access_address, address, reason)
+        )
+
+    def step(self, thread_id: int, address: int):
+        print("STEP: %d @ 0x%X" % (thread_id, address))
+
 
 class RedirectingNotificationHandler(NotificationHandler):
     """Redirects notifications to callbacks passed in init."""
@@ -450,6 +479,8 @@ class RedirectingNotificationHandler(NotificationHandler):
         on_terminate_thread=None,
         on_execution_state_change=None,
         on_breakpoint=None,
+        on_data_breakpoint=None,
+        on_step=None,
     ):
         super().__init__()
 
@@ -470,6 +501,10 @@ class RedirectingNotificationHandler(NotificationHandler):
             on_execution_state_change if on_execution_state_change else default_handler
         )
         self.on_breakpoint = on_breakpoint if on_breakpoint else default_handler
+        self.on_data_breakpoint = (
+            on_data_breakpoint if on_data_breakpoint else default_handler
+        )
+        self.on_step = on_step if on_step else default_handler
 
     def debugstr(self, thread_id: int, text: str):
         self.on_debugstr(thread_id, text)
@@ -484,16 +519,29 @@ class RedirectingNotificationHandler(NotificationHandler):
         self.on_section_load(sect)
 
     def create_thread(self, thread_id: int, start_address: int):
-        self.create_thread(thread_id, start_address)
+        self.on_create_thread(thread_id, start_address)
 
     def terminate_thread(self, thread_id: int):
-        self.terminate_thread(thread_id)
+        self.on_terminate_thread(thread_id)
 
     def execution_state_change(self, new_state: str):
-        self.execution_state_change(new_state)
+        self.on_execution_state_change(new_state)
 
     def breakpoint(self, thread_id: int, address: int, reason: str):
-        self.breakpoint(thread_id, address, reason)
+        self.on_breakpoint(thread_id, address, reason)
+
+    def data_breakpoint(
+        self,
+        thread_id: int,
+        access: str,
+        access_address: int,
+        address: int,
+        reason: str,
+    ):
+        self.on_data_breakpoint(thread_id, access, access_address, address, reason)
+
+    def step(self, thread_id: int, address: int):
+        self.on_step(thread_id, address)
 
 
 class Debugger(_XBDMClient):
@@ -867,6 +915,8 @@ class Debugger(_XBDMClient):
             "terminate ": self._process_terminate_thread,
             "execution ": self._process_execution_state_change,
             "break ": self._process_break,
+            "data": self._process_data_break,
+            "singlestep": self._process_single_step_break,
         }
 
     def _on_notification(self, message: str):
@@ -989,10 +1039,10 @@ class Debugger(_XBDMClient):
         self._notification_handler.execution_state_change(message)
 
     _BREAK_RE = re.compile(
-        r"\s+".join([_match_hex(x) for x in ["addr", "thread"]]) + "\s+(.+)"
+        r"\s+".join([_match_hex(x) for x in ["addr", "thread"]]) + "\s+(.+)?"
     )
 
-    def _process_break(self, message):
+    def _process_break(self, message: str):
         match = self._BREAK_RE.match(message)
         if not match:
             logger.error(f"FAILED TO MATCH BREAK: {message}")
@@ -1000,7 +1050,7 @@ class Debugger(_XBDMClient):
 
         address = int(match.group(1), 0)
         thread_id = int(match.group(2), 0)
-        reason = match.group(3)
+        reason = match.group(3) or ""
 
         thread = self._threads.get(thread_id)
         if not thread:
@@ -1013,3 +1063,62 @@ class Debugger(_XBDMClient):
 
         logger.debug("!!! BREAK !!! %d @ 0x%X %s" % (thread_id, address, reason))
         self._notification_handler.breakpoint(thread_id, address, reason)
+
+    _DATA_BREAK_RE = re.compile(
+        r"\s+".join([_match_hex(x) for x in ["(read|write|execute)", "addr", "thread"]])
+        + "\s+(.+)?"
+    )
+
+    def _process_data_break(self, message: str):
+        match = self._DATA_BREAK_RE.match(message)
+        if not match:
+            logger.error(f"FAILED TO MATCH DATA BREAK: {message}")
+            return
+
+        access = match.group(1)
+        accessed_address = int(match.group(2), 0)
+        access_instruction_pointer = int(match.group(3), 0)
+        thread_id = int(match.group(4), 0)
+        reason = match.group(5) or ""
+
+        thread = self._threads.get(thread_id)
+        if not thread:
+            thread = Thread(thread_id, self._connection)
+            self._threads[thread_id] = thread
+            thread.get_info()
+
+        thread.last_known_address = accessed_address
+        self._active_thread_id = thread_id
+
+        logger.debug(
+            "!!! DATA BREAK !!! %d: %s@0x%08X @ 0x%X %s"
+            % (thread_id, access, access_instruction_pointer, accessed_address, reason)
+        )
+        self._notification_handler.data_breakpoint(
+            thread_id, access, access_instruction_pointer, accessed_address, reason
+        )
+
+    _SINGLE_STEP_RE = re.compile(
+        r"\s+".join([_match_hex(x) for x in ["addr", "thread"]]) + "\s+(.+)?"
+    )
+
+    def _process_single_step_break(self, message: str):
+        match = self._SINGLE_STEP_RE.match(message)
+        if not match:
+            logger.error(f"FAILED TO MATCH SINGLESTEP: {message}")
+            return
+
+        address = int(match.group(1), 0)
+        thread_id = int(match.group(2), 0)
+
+        thread = self._threads.get(thread_id)
+        if not thread:
+            thread = Thread(thread_id, self._connection)
+            self._threads[thread_id] = thread
+            thread.get_info()
+
+        thread.last_known_address = address
+        self._active_thread_id = thread_id
+
+        logger.debug("!!! SINGLESTEP !!! %d @ 0x%X" % (thread_id, address))
+        self._notification_handler.step(thread_id, address)

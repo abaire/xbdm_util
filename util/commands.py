@@ -44,7 +44,8 @@ def _break(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
         print(f"{response}\n{response.raw_body.decode('utf-8')}")
 
     if not args:
-        return rdcp_command.BreakNow(handler=_print_with_message)
+        # This will break within the XBDM process which will cause XBDM to stop listening for continue events, causing a deadlock.
+        return None
 
     mode = args[0].lower()
     # This will break within the XBDM process which will cause XBDM to stop listening for continue events, causing a deadlock.
@@ -70,7 +71,7 @@ def _break(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
         if len(args) > 2:
             size = int(args[2], 0)
         else:
-            size = 0
+            size = 1
         return rdcp_command.BreakOnRead(
             address, size, clear, handler=_print_with_message
         )
@@ -80,7 +81,7 @@ def _break(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
         if len(args) > 2:
             size = int(args[2], 0)
         else:
-            size = 0
+            size = 1
         return rdcp_command.BreakOnWrite(
             address, size, clear, handler=_print_with_message
         )
@@ -90,7 +91,7 @@ def _break(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
         if len(args) > 2:
             size = int(args[2], 0)
         else:
-            size = 0
+            size = 1
         return rdcp_command.BreakOnExecute(
             address, size, clear, handler=_print_with_message
         )

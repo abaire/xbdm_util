@@ -359,9 +359,9 @@ class _BreakRange(_Break):
     ):
         super().__init__(handler)
         clear_string = "clear " if clear else ""
-        size_string = f"size={size}" if not clear else ""
+        size_string = f" size={size}" if not clear else ""
         self.body = bytes(
-            f" {clear_string}{access_type}={address}{size_string}", "utf-8"
+            f" {clear_string}{access_type}=0x%08X{size_string}" % address, "utf-8"
         )
 
 
