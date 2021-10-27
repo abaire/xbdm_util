@@ -448,10 +448,9 @@ def _reboot(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
         "stop": rdcp_command.Reboot.FLAG_STOP,
     }
 
-    mode = modes.get(args[0].lower() if args else None)
-    if not mode:
-        return rdcp_command.Reboot(handler=print)
-
+    mode = 0
+    for arg in args:
+        mode |= modes.get(arg.lower(), 0)
     return rdcp_command.Reboot(mode, handler=print)
 
 

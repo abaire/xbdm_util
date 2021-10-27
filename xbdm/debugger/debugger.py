@@ -867,32 +867,34 @@ class Debugger(_XBDMClient):
 
         # Wait for the connection to drop during the restart
         logger.debug("Waiting for XBOX to drop connection.")
-        max_wait = 1000
+        max_wait_secs = 10
         busy_wait_secs = 0.025
         while self._connection.can_process_xbdm_commands:
             time.sleep(busy_wait_secs)
-            max_wait -= busy_wait_secs
-            if max_wait <= 0:
+            max_wait_secs -= busy_wait_secs
+            if max_wait_secs <= 0:
                 logger.error("XBOX does not appear to have rebooted, aborting.")
                 return
 
         # Wait for XBDM to say "hello" on the debug channel
         logger.debug("Waiting for XBOX to become available.")
-        max_wait = 30000
+        max_wait_secs = 30
         while not self._hello_received:
             time.sleep(busy_wait_secs)
-            max_wait -= busy_wait_secs
-            if max_wait <= 0:
-                logger.error("XBOX has not come back from reboot, aborting.")
-                return
+            max_wait_secs -= busy_wait_secs
+            if max_wait_secs <= 0:
+                logger.error(
+                    "XBOX has not come back from reboot, attempting reconnect."
+                )
+                break
 
         # Attempt to reconnect the control channel.
-        max_wait = 10
+        max_wait_secs = 10
         self._connection.debugger__set_control_channel_state_to_connected()
         while not self._connection.connect_xbdm():
             self._connection.debugger__set_control_channel_state_to_connected()
-            max_wait -= 1
-            if max_wait <= 0:
+            max_wait_secs -= 1
+            if max_wait_secs <= 0:
                 logger.error(
                     "Failed to reconnect debugger channel after restart, aborting."
                 )

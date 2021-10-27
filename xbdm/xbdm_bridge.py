@@ -194,8 +194,6 @@ class XBDMBridge:
                     self._xbdm.close()
                     print("XBDM connection closed")
             except ConnectionResetError as e:
-                logger.error("TODO: handle connection reset gracefully")
-                logger.error(e)
                 self._xbdm.close()
 
         logger.debug(f"Shutting down connection for {self.xbox_info}")
