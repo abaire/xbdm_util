@@ -4,19 +4,20 @@ from __future__ import annotations
 import collections
 import logging
 import re
-import threading
-
 import struct
+import threading
 import time
+from typing import Any
+from typing import Callable
+from typing import Dict
+from typing import Iterable
+from typing import List
+from typing import Mapping
+from typing import Optional
 
 from xbdm import rdcp_command
 from xbdm.xbdm_bridge import XBDMBridge
 from xbdm.xbdm_notification_server import XBDMNotificationServer
-
-from typing import Callable
-from typing import Dict
-from typing import Iterable
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +123,7 @@ class Thread(_XBDMClient):
         self.get_info()
 
         self.last_known_address: Optional[int] = None
-        self.last_stop_reason: Optional[rdcp_command.IsStopped.StopReason]
+        self.last_stop_reason: Optional[rdcp_command.IsStopped.StopReason] = None
 
     def __str__(self) -> str:
         lines = [
@@ -420,6 +421,11 @@ class NotificationHandler:
     def step(self, _thread_id: int, _address: int):
         pass
 
+    def exception(
+        self, _thread_id: int, _code: int, _address: int, _read: int, _extra: str
+    ):
+        pass
+
 
 class DefaultNotificationHandler(NotificationHandler):
     """Default notification handler that just prints to the console."""
@@ -464,6 +470,12 @@ class DefaultNotificationHandler(NotificationHandler):
     def step(self, thread_id: int, address: int):
         print("STEP: %d @ 0x%X" % (thread_id, address))
 
+    def exception(self, thread_id: int, code: int, address: int, read: int, extra: str):
+        print(
+            "EXCEPTION %d code 0x%X @ 0x%X read: 0x%X extra: '%s'"
+            % (thread_id, code, address, read, extra)
+        )
+
 
 class RedirectingNotificationHandler(NotificationHandler):
     """Redirects notifications to callbacks passed in init."""
@@ -480,6 +492,7 @@ class RedirectingNotificationHandler(NotificationHandler):
         on_breakpoint=None,
         on_data_breakpoint=None,
         on_step=None,
+        on_exception=None,
     ):
         super().__init__()
 
@@ -504,6 +517,7 @@ class RedirectingNotificationHandler(NotificationHandler):
             on_data_breakpoint if on_data_breakpoint else default_handler
         )
         self.on_step = on_step if on_step else default_handler
+        self.on_exception = on_exception if on_exception else default_handler
 
     def debugstr(self, thread_id: int, text: str):
         self.on_debugstr(thread_id, text)
@@ -542,9 +556,31 @@ class RedirectingNotificationHandler(NotificationHandler):
     def step(self, thread_id: int, address: int):
         self.on_step(thread_id, address)
 
+    def exception(self, thread_id: int, code: int, address: int, read: int, extra: str):
+        self.on_exception(thread_id, code, address, read, extra)
+
 
 class Debugger(_XBDMClient):
     """Provides high level debugger functionality."""
+
+    class _MemoryRegion:
+        def __init__(self, walkmem_result: Mapping[str, Any]):
+            self.start = walkmem_result["base_address"]
+            self.size = walkmem_result["size"]
+            self.protection = walkmem_result["protection_flags"]
+            self.end = self.start + self.size
+
+        def __str__(self):
+            return "%s 0x%08X - 0x%08X [%d] FL:0x%08X" % (
+                self.__class__.__name__,
+                self.start,
+                self.end,
+                self.size,
+                self.protection,
+            )
+
+        def contains(self, start: int, size: int) -> bool:
+            return start >= self.start and (start + size) <= self.end
 
     def __init__(
         self,
@@ -565,6 +601,7 @@ class Debugger(_XBDMClient):
         self._threads: Dict[int, Thread] = {}
         self._module_table: Dict[str, Module] = {}
         self._section_table: Dict[int, Section] = {}
+        self._memory_regions: List[Debugger._MemoryRegion] = []
 
         self._running = True
         self._notification_queue_cv = threading.Condition()
@@ -645,6 +682,7 @@ class Debugger(_XBDMClient):
         )
         self._connection.send_command(rdcp_command.Debugger())
         self.refresh_thread_info()
+        self.refresh_memory_map()
 
     def debug_xbe(
         self,
@@ -769,6 +807,16 @@ class Debugger(_XBDMClient):
         for thread_id in to_update:
             self._threads[thread_id].get_info()
 
+    def refresh_memory_map(self):
+        response = self._call(rdcp_command.WalkMem())
+        if not response.ok:
+            logger.error("Failed to retrieve memory map!")
+            return
+
+        self._memory_regions = [
+            self._MemoryRegion(region) for region in response.regions
+        ]
+
     def get_thread_context(self) -> Optional[Thread.Context]:
         thread = self.active_thread
         if not thread:
@@ -835,6 +883,10 @@ class Debugger(_XBDMClient):
 
     def get_memory(self, address: int, length: int) -> Optional[bytes]:
         """Reads memory from the target."""
+
+        if not self._validate_memory_access(address, length):
+            return None
+
         response = self._call(rdcp_command.GetMemBinary(address, length))
         if not response.ok:
             return None
@@ -842,6 +894,8 @@ class Debugger(_XBDMClient):
 
     def set_memory(self, address: int, data: bytes) -> bool:
         """Writes memory to the given target address."""
+        if not self._validate_memory_access(address, len(data)):
+            return False
         response = self._call(rdcp_command.SetMem(address, data))
         return response.ok
 
@@ -936,6 +990,18 @@ class Debugger(_XBDMClient):
         self._connection.send_command(rdcp_command.Debugger())
         return True
 
+    def _validate_memory_access(self, address: int, length: int) -> bool:
+        if not self._memory_regions:
+            logger.warning("No memory regions mapped, assuming access is OK.")
+            return True
+
+        # TODO: Validate that the region is writable if necessary.
+        for region in self._memory_regions:
+            if region.contains(address, length):
+                return True
+
+        return False
+
     def _build_notification_dispatch(self) -> Dict[str, Callable[[str], None]]:
         return {
             "vx!": self._process_vx,
@@ -948,6 +1014,7 @@ class Debugger(_XBDMClient):
             "break ": self._process_break,
             "data ": self._process_data_break,
             "singlestep ": self._process_single_step_break,
+            "exception ": self._process_exception,
         }
 
     def _on_notification(self, message: str):
@@ -1016,6 +1083,8 @@ class Debugger(_XBDMClient):
             logger.error(f"FAILED TO MATCH MODLOAD: {message}")
             return
         self._module_table[mod.name] = mod
+        # TODO: It is likely safe to just add the new module to the existing map.
+        self.refresh_memory_map()
         self._notification_handler.module_load(mod)
 
     def _process_sectload(self, message):
@@ -1160,3 +1229,26 @@ class Debugger(_XBDMClient):
 
         logger.debug("!!! SINGLESTEP !!! %d @ 0x%X" % (thread_id, address))
         self._notification_handler.step(thread_id, address)
+
+    _EXCEPTION_RE = re.compile(
+        r"\s+".join([_match_hex(x) for x in ["code", "thread", "address", "read"]])
+        + "\s*(.+)?"
+    )
+
+    def _process_exception(self, message: str):
+        match = self._EXCEPTION_RE.match(message)
+        if not match:
+            logger.error(f"FAILED TO MATCH EXCEPTION: {message}")
+            return
+
+        code = int(match.group(1), 0)
+        thread_id = int(match.group(2), 0)
+        address = int(match.group(3), 0)
+        read = int(match.group(4), 0)
+        extra = match.group(5)
+
+        logger.debug(
+            "!!! EXCEPTION !!! %d code 0x%X @ 0x%X read: 0x%X extra: '%s'"
+            % (thread_id, code, address, read, extra)
+        )
+        self._notification_handler.exception(thread_id, code, address, read, extra)

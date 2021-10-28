@@ -94,6 +94,7 @@ class GDBTransport(ip_transport.IPTransport):
             on_execution_state_change=self._on_execution_state_change,
             on_breakpoint=self._on_breakpoint,
             on_data_breakpoint=self._on_data_breakpoint,
+            on_step=self._on_step_breakpoint,
         )
         self._debugger = debugger.Debugger(self._bridge, notification_handler=handler)
         self._debugger.attach()
@@ -377,7 +378,7 @@ class GDBTransport(ip_transport.IPTransport):
         if mem:
             self.send_packet(GDBPacket(mem.hex()))
         else:
-            self._send_error(errno.EACCES)
+            self._send_error(errno.EFAULT)
 
     def _handle_write_memory(self, pkt: GDBPacket):
         place, data = pkt.data[1:].split(":")
@@ -500,7 +501,7 @@ class GDBTransport(ip_transport.IPTransport):
     def _set_memory(self, addr: int, data: bytes):
         result = self._debugger.set_memory(addr, data)
         if not result:
-            self._send_error(errno.EPIPE)
+            self._send_error(errno.EFAULT)
             return
         self._send_ok()
 
@@ -712,8 +713,9 @@ class GDBTransport(ip_transport.IPTransport):
 
         # Move the preferred thread to the front of the list.
         first_id = self._debugger.any_thread_id
-        self._thread_info_buffer.remove(first_id)
-        self._thread_info_buffer.insert(0, first_id)
+        if first_id:
+            self._thread_info_buffer.remove(first_id)
+            self._thread_info_buffer.insert(0, first_id)
 
         if not self._thread_info_buffer:
             self.send_packet(GDBPacket("l"))
@@ -744,6 +746,7 @@ class GDBTransport(ip_transport.IPTransport):
         thread = self._debugger.active_thread
         if not thread:
             self._send_empty()
+            return
 
         self.send_packet(GDBPacket("QC%x" % thread.thread_id))
 
@@ -790,24 +793,25 @@ class GDBTransport(ip_transport.IPTransport):
             self._send_error(1)
             return
 
-        if args == "c":
-            logger.warning("TODO: Check that continue_all actually works.")
-            self._debugger.continue_all()
-            self._debugger.go()
-            self._send_ok()
-            return
+        for command in args.split(";"):
+            if command == "c":
+                self._debugger.continue_all()
+                self._debugger.go()
+                self._send_ok()
+                continue
 
-        if args[0] == "s":
-            if ":" in args:
-                thread_id = args.split(":", 1)[1]
-                thread_id = int(thread_id, 16)
-                self._debugger.set_active_thread(thread_id)
-            self._debugger.step_instruction()
-            self._send_ok()
-            return
+            if command[0] == "s":
+                if ":" in command:
+                    thread_id = command.split(":", 1)[1]
+                    thread_id = int(thread_id, 16)
+                    self._debugger.set_active_thread(thread_id)
+                self._debugger.step_instruction()
+                self._send_ok()
+                continue
 
-        logger.error("TODO: IMPLEMENT _handle_vcont")
-        self._send_error(errno.EBADMSG)
+            logger.error(f"TODO: IMPLEMENT _handle_vcont {args} - subcommand {command}")
+            self._send_error(errno.EBADMSG)
+            break
 
     def _send_empty(self):
         self.send_packet(GDBPacket())
@@ -875,6 +879,9 @@ class GDBTransport(ip_transport.IPTransport):
         _reason: str,
     ):
         self._send_data_stop_packet(thread_id, access, address)
+
+    def _on_step_breakpoint(self, thread_id: int, _address: int):
+        self._send_thread_stop_packet(self._debugger.get_thread(thread_id))
 
 
 def _handle_build_command(

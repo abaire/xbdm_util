@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import socket
+import threading
 from typing import Callable
 from typing import Optional
 from typing import Tuple
@@ -21,11 +22,12 @@ class IPTransport:
         self.name: Optional[str] = name
         self._sock: Optional[socket.socket] = None
         self.addr: Optional[Tuple[str, int]] = None
-        self._read_buffer = bytearray()
-        self._write_buffer = bytearray()
+        self._read_buffer: bytearray = bytearray()
+        self._write_buffer_lock: threading.RLock = threading.RLock()
+        self._write_buffer: bytearray = bytearray()
         self._on_bytes_read: Optional[Callable[[IPTransport], None]] = process_callback
 
-        self._sub_connections = set()
+        self._sub_connections: set = set()
 
     @property
     def connected(self) -> bool:
@@ -66,13 +68,15 @@ class IPTransport:
         self._sock.close()
         self._sock = None
         self._read_buffer.clear()
-        self._write_buffer.clear()
+        with self._write_buffer_lock:
+            self._write_buffer.clear()
 
         for connection in self._sub_connections:
             connection.close()
 
     def send(self, buffer: Union[bytes, bytearray]):
-        self._write_buffer.extend(buffer)
+        with self._write_buffer_lock:
+            self._write_buffer.extend(buffer)
 
     def broadcast(self, message: bytes) -> None:
         self._broadcast_sub_connections(message)
@@ -92,8 +96,9 @@ class IPTransport:
 
         readable.append(self._sock)
         exceptional.append(self._sock)
-        if self._write_buffer:
-            writable.append(self._sock)
+        with self._write_buffer_lock:
+            if self._write_buffer:
+                writable.append(self._sock)
 
     def process(
         self,
@@ -133,8 +138,10 @@ class IPTransport:
                 self._on_bytes_read(self)
 
         if self._sock in writable:
-            bytes_sent = self._sock.send(self._write_buffer)
-            self._write_buffer = self._write_buffer[bytes_sent:]
+            with self._write_buffer_lock:
+                bytes_sent = self._sock.send(self._write_buffer)
+                del self._write_buffer[:bytes_sent]
+                # self._write_buffer = self._write_buffer[bytes_sent:]
 
         return True
 
