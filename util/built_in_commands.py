@@ -1,14 +1,19 @@
 """Provides handlers for shell built-in commands."""
-import binascii
 import enum
+import socket
 import textwrap
+from typing import Callable
 from typing import List
 from typing import Optional
+from typing import Tuple
 
+import gdb
 from . import commands
+from net import ip_transport
 from xbdm import rdcp_command
 from xbdm.debugger import Debugger
 from xbdm.debugger import Thread
+from xbdm import xbdm_bridge
 
 
 class Result(enum.Enum):
@@ -79,6 +84,46 @@ def _cmd_send_raw(shell, args: [str]) -> Result:
         body = bytes(" ".join(args[1:]), "utf-8")
     cmd = rdcp_command.RDCPCommand(args[0], body)
     shell._bridge.send_command(cmd)
+
+    return Result.HANDLED
+
+
+def _cmd_start_gdb_bridge(shell, args: [str]) -> Result:
+    """[ip:port]
+
+    Starts a GDB bridge, allowing GDB to communicate with the XBDM target.
+
+    ip:port - The ip and port to listen for GDB at. Both components are optional, with
+              default behavior being to bind to all local IPs on an arbitrary port.
+    """
+    listen_ip: str = ""
+    listen_port: int = 0
+
+    if args:
+        components = args[0].split(":")
+        if len(components) > 2:
+            print("Address must be of the form 'ip:port'.")
+            return Result.HANDLED
+
+        components = list(components)
+        if len(components) == 2:
+            listen_port = int(components[1])
+        listen_ip = components[0]
+
+    def construct_transport(
+        bridge: xbdm_bridge.XBDMBridge,
+        remote: socket.socket,
+        remote_addr: Tuple[str, int],
+    ) -> Optional[ip_transport.IPTransport]:
+
+        ret = gdb.GDBTransport(bridge, f"GDB@{remote_addr}", shell._debugger)
+        ret.set_connection(remote, remote_addr)
+        return ret
+
+    bridge: xbdm_bridge.XBDMBridge = shell._bridge
+    bridge.destroy_remote_listener()
+    bridge.create_remote_listener((listen_ip, listen_port), construct_transport)
+    print(f"Listening for GDB connections at {bridge.remote_listen_addr}")
 
     return Result.HANDLED
 
@@ -318,42 +363,6 @@ def _print_thread_ext_context(thread_id: int, info: Optional[Thread.FullContext]
         print("  %-15s: %s" % (key, value))
 
 
-# eax            0x2                 2
-# ecx            0x8004ab40          -2147177664
-# edx            0xb0a9              45225
-# ebx            0x8004ac8c          -2147177332
-# esp            0x8004ea70          0x8004ea70
-# ebp            0x8004acdc          0x8004acdc
-# esi            0x8004ab40          -2147177664
-# edi            0xd0027ab8          -805143880
-# eip            0x80024a97          0x80024a97
-# eflags         0x246               [ IOPL=0 IF ZF PF ]
-# cs             0x8                 8
-# ss             0x10                16
-# ds             0x10                16
-# es             0x10                16
-# fs             0x20                32
-# gs             0x0                 0
-# fs_base        0x8004ac8c          -2147177332
-# gs_base        0x0                 0
-# k_gs_base      0x0                 0
-# cr0            0x8001003b          [ PG WP NE ET TS MP PE ]
-# cr2            0x0                 0
-# cr3            0xf000              [ PDBR=0 PCID=0 ]
-# cr4            0x610               [ PSE OSFXSR OSXMMEXCPT ]
-# cr8            0x0                 0
-# efer           0x0                 [ ]
-# xmm0           {v4_float = {0x0, 0x0, 0x0, 0x0}, v2_double = {0x0, 0x0}, v16_int8 = {0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}, v8_int16 = {0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}, v4_int32 = {0x0, 0x0, 0x0, 0x0}, v2_int64 = {0x0, 0x0}, uint128 = 0x0}
-# xmm1           {v4_float = {0x1, 0x140, 0xf0, 0x0}, v2_double = {0x800001fc0000000, 0x0}, v16_int8 = {0x0, 0x0, 0x80, 0x3f, 0x0, 0x0, 0xa0, 0x43, 0x0, 0x0, 0x70, 0x43, 0x0, 0x0, 0x0, 0x0}, v8_int16 = {0x0, 0x3f80, 0x0, 0x43a0, 0x0, 0x4370, 0x0, 0x0}, v4_int32 = {0x3f800000, 0x43a00000, 0x43700000, 0x0}, v2_int64 = {0x43a000003f800000, 0x43700000}, uint128 = 0x4370000043a000003f800000}
-# xmm2           {v4_float = {0x0, 0x140, 0x0, 0x0}, v2_double = {0x800000000000000, 0x0}, v16_int8 = {0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xa0, 0x43, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}, v8_int16 = {0x0, 0x0, 0x0, 0x43a0, 0x0, 0x0, 0x0, 0x0}, v4_int32 = {0x0, 0x43a00000, 0x0, 0x0}, v2_int64 = {0x43a0000000000000, 0x0}, uint128 = 0x43a0000000000000}
-# xmm3           {v4_float = {0x0, 0x0, 0xffffff10, 0x0}, v2_double = {0x0, 0x0}, v16_int8 = {0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x70, 0xc3, 0x0, 0x0, 0x0, 0x0}, v8_int16 = {0x0, 0x0, 0x0, 0x0, 0x0, 0xc370, 0x0, 0x0}, v4_int32 = {0x0, 0x0, 0xc3700000, 0x0}, v2_int64 = {0x0, 0xc3700000}, uint128 = 0xc37000000000000000000000}
-# xmm4           {v4_float = {0x0, 0x0, 0x0, 0x0}, v2_double = {0x0, 0x0}, v16_int8 = {0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}, v8_int16 = {0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}, v4_int32 = {0x0, 0x0, 0x0, 0x0}, v2_int64 = {0x0, 0x0}, uint128 = 0x0}
-# xmm5           {v4_float = {0x1, 0x140, 0xf0, 0x0}, v2_double = {0x800001fc0000000, 0x0}, v16_int8 = {0x0, 0x0, 0x80, 0x3f, 0x0, 0x0, 0xa0, 0x43, 0x0, 0x0, 0x70, 0x43, 0x0, 0x0, 0x0, 0x0}, v8_int16 = {0x0, 0x3f80, 0x0, 0x43a0, 0x0, 0x4370, 0x0, 0x0}, v4_int32 = {0x3f800000, 0x43a00000, 0x43700000, 0x0}, v2_int64 = {0x43a000003f800000, 0x43700000}, uint128 = 0x4370000043a000003f800000}
-# xmm6           {v4_float = {0x0, 0x0, 0x0, 0x0}, v2_double = {0x0, 0x0}, v16_int8 = {0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}, v8_int16 = {0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}, v4_int32 = {0x0, 0x0, 0x0, 0x0}, v2_int64 = {0x0, 0x0}, uint128 = 0x0}
-# xmm7           {v4_float = {0x0, 0x0, 0x0, 0x0}, v2_double = {0x0, 0x0}, v16_int8 = {0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xa0, 0x1f, 0x0, 0x0}, v8_int16 = {0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1fa0, 0x0}, v4_int32 = {0x0, 0x0, 0x0, 0x1fa0}, v2_int64 = {0x0, 0x1fa000000000}, uint128 = 0x1fa0000000000000000000000000}
-# mxcsr          0x1fa0              [ PE IM DM ZM OM UM PM ]
-
-
 def _cmd_debugger_get_all_thread_info(shell, _args: [str]) -> Result:
     """
 
@@ -546,6 +555,7 @@ DISPATCH_TABLE = {
     "h": _cmd_help,
     "reconnect": _cmd_reconnect,
     "raw": _cmd_send_raw,
+    "gdb": _cmd_start_gdb_bridge,
     "/launch": _cmd_debugger_launch,
     "/launchwait": _cmd_debugger_launch_wait,
     "/launchpersist": _cmd_debugger_launch_persistent,

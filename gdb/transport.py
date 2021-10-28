@@ -64,11 +64,16 @@ class GDBTransport(ip_transport.IPTransport):
     BP_READ = 3
     BP_ACCESS = 4
 
-    def __init__(self, bridge: xbdm_bridge.XBDMBridge, name: str):
+    def __init__(
+        self,
+        bridge: xbdm_bridge.XBDMBridge,
+        name: str,
+        dbg: Optional[debugger.Debugger] = None,
+    ):
         super().__init__(process_callback=self._on_bytes_read, name=name)
         self._state = self.STATE_INIT
         self._bridge: xbdm_bridge.XBDMBridge = bridge
-        self._debugger: Optional[debugger.Debugger] = None
+        self._debugger: Optional[debugger.Debugger] = dbg
         self._send_queue = collections.deque()
 
         # Maps a command type to the thread id that should be used when interpreting that command.
@@ -85,6 +90,7 @@ class GDBTransport(ip_transport.IPTransport):
         self.features = {"QStartNoAckMode": False}
 
     def start(self) -> bool:
+        super().start()
         connected = self._bridge.connect_xbdm()
         if not connected:
             logger.error("Failed to connect to XBDM")
@@ -96,7 +102,15 @@ class GDBTransport(ip_transport.IPTransport):
             on_data_breakpoint=self._on_data_breakpoint,
             on_step=self._on_step_breakpoint,
         )
-        self._debugger = debugger.Debugger(self._bridge, notification_handler=handler)
+        if not self._debugger:
+            self._debugger = debugger.Debugger(
+                self._bridge, notification_handler=handler
+            )
+        else:
+            logger.info(
+                f"{self.__class__.__name__} taking ownership of existing debugger."
+            )
+            self._debugger.set_notification_handler(handler)
         self._debugger.attach()
         self._debugger.halt()
 
@@ -415,6 +429,10 @@ class GDBTransport(ip_transport.IPTransport):
             self._handle_query_supported(pkt)
             return
 
+        if query.startswith("ThreadExtraInfo"):
+            self._handle_query_thread_extra_info(pkt)
+            return
+
         if query == "fThreadInfo":
             self._handle_thread_info_start()
             return
@@ -708,6 +726,15 @@ class GDBTransport(ip_transport.IPTransport):
         self._state = self.STATE_CONNECTED
         self.send_packet(pkt)
 
+    def _handle_query_thread_extra_info(self, pkt: GDBPacket):
+        _, thread_id = pkt.data.split(",")
+        thread_id = int(thread_id, 16)
+
+        thread = self._debugger.get_thread(thread_id)
+        info = f"{thread_id} {thread.last_stop_reason or 'Running'}"
+        response = GDBPacket(bytes(info, "utf-8").hex())
+        self.send_packet(response)
+
     def _handle_thread_info_start(self):
         self._thread_info_buffer = [thr.thread_id for thr in self._debugger.threads]
 
@@ -882,24 +909,3 @@ class GDBTransport(ip_transport.IPTransport):
 
     def _on_step_breakpoint(self, thread_id: int, _address: int):
         self._send_thread_stop_packet(self._debugger.get_thread(thread_id))
-
-
-def _handle_build_command(
-    _args: List[str],
-) -> Optional[
-    Callable[
-        [xbdm_bridge.XBDMBridge, socket.socket, Tuple[str, int]],
-        Optional[ip_transport.IPTransport],
-    ]
-]:
-    def construct_transport(
-        bridge: xbdm_bridge.XBDMBridge,
-        remote: socket.socket,
-        remote_addr: Tuple[str, int],
-    ) -> Optional[ip_transport.IPTransport]:
-
-        ret = GDBTransport(bridge, f"GDB@{remote_addr}")
-        ret.set_connection(remote, remote_addr)
-        return ret
-
-    return construct_transport

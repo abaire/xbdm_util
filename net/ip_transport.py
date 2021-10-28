@@ -62,7 +62,7 @@ class IPTransport:
 
         try:
             self._sock.shutdown(socket.SHUT_RDWR)
-        except OSError:
+        except:
             # Ignore exception if the socket is already disconnected.
             pass
         self._sock.close()
@@ -122,7 +122,11 @@ class IPTransport:
             return False
 
         if self._sock in readable:
-            data = self._sock.recv(4096)
+            try:
+                data = self._sock.recv(4096)
+            except:
+                data = None
+
             if not data:
                 if self.name:
                     logger.info(

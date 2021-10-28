@@ -1,13 +1,9 @@
-import socket
 import logging
-from typing import Callable
 from typing import Optional
 from typing import Tuple
 
-from net import ip_transport
 from . import xbdm_bridge
 from . import xbdm_connection_info
-from . import xbdm_transport
 
 logger = logging.getLogger(__name__)
 
@@ -19,25 +15,14 @@ class BridgeManager:
         self._bridges: {Tuple[str, int]: xbdm_bridge.XBDMBridge} = {}
 
     def start_bridge(
-        self,
-        listen_addr: Optional[Tuple[str, int]],
-        xbox_name: str,
-        xbox_addr: Tuple[str, int],
-        remote_connected_handler: Optional[
-            Callable[
-                [xbdm_bridge.XBDMBridge, socket.socket, Tuple[str, int]],
-                Optional[ip_transport.IPTransport],
-            ]
-        ] = None,
+        self, xbox_name: str, xbox_addr: Tuple[str, int]
     ) -> xbdm_bridge.XBDMBridge:
         old_bridge: xbdm_bridge.XBDMBridge = self._bridges.get(xbox_addr, None)
         if old_bridge:
             return old_bridge
 
         logger.info(f"Adding bridge to {xbox_name}@{xbox_addr}")
-        new_bridge = xbdm_bridge.XBDMBridge(
-            listen_addr, xbox_name, xbox_addr, remote_connected_handler
-        )
+        new_bridge = xbdm_bridge.XBDMBridge(xbox_name, xbox_addr)
         self._bridges[xbox_addr] = new_bridge
         return new_bridge
 
@@ -50,6 +35,7 @@ class BridgeManager:
 
     def get_bridge_infos(self) -> [xbdm_connection_info.ConnectionInfo]:
         ret = []
+        bridge: xbdm_bridge.XBDMBridge
         for bridge in self._bridges.values():
             ret.append(
                 xbdm_connection_info.ConnectionInfo(

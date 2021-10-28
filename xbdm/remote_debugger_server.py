@@ -16,7 +16,7 @@ from net import ip_transport
 logger = logging.getLogger(__name__)
 
 
-class XBDMBridgeRemoteServer(ip_transport.IPTransport):
+class RemoteDebuggerServer(ip_transport.IPTransport):
     """Creates a listener that will accept IPTransport connections for bridging."""
 
     THREAD_SLEEP_SECS = 0.100
