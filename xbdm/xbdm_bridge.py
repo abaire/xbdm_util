@@ -146,7 +146,8 @@ class XBDMBridge:
 
     def destroy_notification_listener(self, port: int):
         """Closes an existing dedicated notification listener."""
-        for transport in self._dedicated_channels:
+        channels = set(self._dedicated_channels)
+        for transport in channels:
             if not isinstance(
                 transport, xbdm_notification_server.XBDMNotificationServer
             ):
@@ -157,7 +158,8 @@ class XBDMBridge:
             transport.close()
 
     def broadcast_notification(self, message: str) -> None:
-        for channel in self._dedicated_channels:
+        channels = set(self._dedicated_channels)
+        for channel in channels:
             channel.broadcast(bytes(message, "utf-8"))
 
     def debugger__set_control_channel_state_to_connected(self):

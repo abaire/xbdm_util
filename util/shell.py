@@ -52,6 +52,8 @@ class Shell:
                 continue
 
             if result == built_in_commands.Result.EXIT_REQUESTED:
+                if self._debugger:
+                    self._debugger.shutdown()
                 break
 
             if result == built_in_commands.Result.NOT_HANDLED:

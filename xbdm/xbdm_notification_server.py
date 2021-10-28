@@ -46,14 +46,21 @@ class XBDMNotificationServer(ip_transport.IPTransport):
         if self._sock in exceptional:
             if self.name:
                 logger.info(
-                    f"Socket exception in IPTransport {self.name} to {self.addr}"
+                    f"Socket exception in {self.__class__.__name__} {self.name} to {self.addr}"
                 )
             else:
-                logger.info(f"Socket exception in IPTransport to {self.addr}")
+                logger.info(
+                    f"Socket exception in {self.__class__.__name__} to {self.addr}"
+                )
             return False
 
         if self._sock in readable:
-            remote, remote_addr = self._sock.accept()
+            try:
+                remote, remote_addr = self._sock.accept()
+            except OSError:
+                logger.info(f"Socket accept failed in {self.__class__.__name__}")
+                return False
+
             transport = xbdm_notification_transport.XBDMNotificationTransport(
                 self.name, remote, remote_addr, handler=self._handler
             )
