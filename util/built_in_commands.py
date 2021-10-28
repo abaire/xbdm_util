@@ -98,6 +98,47 @@ def _cmd_debugger_launch(shell, args: [str]) -> Result:
         command_line = None
 
     debugger: Debugger = shell._debugger
+    debugger.debug_xbe(args[0], command_line=command_line)
+    return Result.HANDLED
+
+
+def _cmd_debugger_launch_wait(shell, args: [str]) -> Result:
+    """<path_to_xbe> [commandline_arg [...]]
+
+    Launch the given path in the debugger, passing any remaining parameters as launch args.
+    A breakpoint will be set at the XBE entrypoint, but execution will be held until a
+    `go` command is sent.
+    """
+
+    _attach_debugger(shell)
+
+    xbe = args[0]
+    if len(args) > 1:
+        command_line = " ".join(args[1:])
+    else:
+        command_line = None
+
+    debugger: Debugger = shell._debugger
+    debugger.debug_xbe(args[0], command_line=command_line, wait_before_start=True)
+    return Result.HANDLED
+
+
+def _cmd_debugger_launch_persistent(shell, args: [str]) -> Result:
+    """<path_to_xbe> [commandline_arg [...]]
+
+    Launch the given path in the debugger, passing any remaining parameters as launch
+    args and have any future reboots run this same XBE until /clear is invoked.
+    """
+
+    _attach_debugger(shell)
+
+    xbe = args[0]
+    if len(args) > 1:
+        command_line = " ".join(args[1:])
+    else:
+        command_line = None
+
+    debugger: Debugger = shell._debugger
     debugger.debug_xbe(args[0], command_line=command_line, persist=True)
     return Result.HANDLED
 
@@ -105,7 +146,7 @@ def _cmd_debugger_launch(shell, args: [str]) -> Result:
 def _cmd_debugger_clear_launch_target(shell, _args: [str]) -> Result:
     """
 
-    Clears any previously set /launch target.
+    Clears any previously set /launchpersist target.
     """
     if not shell._debugger:
         print("ERROR: /attach debugger first.")
@@ -124,6 +165,19 @@ def _cmd_debugger_attach(shell, _args: [str]) -> Result:
         print("Already in debug mode.")
     else:
         _attach_debugger(shell)
+    return Result.HANDLED
+
+
+def _cmd_debugger_detach(shell, _args: [str]) -> Result:
+    """
+
+    Detach from the target process (note that this does not clear breakpoints/etc...)."""
+    if not shell._debugger:
+        print("Not in debug mode.")
+    else:
+        shell._debugger = None
+        cmd = rdcp_command.Debugger(False)
+        shell._bridge.send_command(cmd)
     return Result.HANDLED
 
 
@@ -493,8 +547,11 @@ DISPATCH_TABLE = {
     "reconnect": _cmd_reconnect,
     "raw": _cmd_send_raw,
     "/launch": _cmd_debugger_launch,
-    "/clear": _cmd_debugger_clear_launch_target,
+    "/launchwait": _cmd_debugger_launch_wait,
+    "/launchpersist": _cmd_debugger_launch_persistent,
+    "/clearpersist": _cmd_debugger_clear_launch_target,
     "/attach": _cmd_debugger_attach,
+    "/detach": _cmd_debugger_detach,
     "/restart": _cmd_debugger_restart,
     "/switch": _cmd_debugger_set_active_thread,
     "/threads": _cmd_debugger_get_thread_info,

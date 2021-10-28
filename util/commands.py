@@ -441,6 +441,16 @@ def _stop_on(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
 
 
 def _reboot(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
+    """[<flag> [...]]
+
+    Reboots the target machine.
+
+    flags:
+      wait - Wait for the debugger to attach on restart.
+      stop - Stop at entry into the launch XBE.
+      nodebug - Do not start XBDM when rebooting.
+      warm - Do a warm reboot.
+    """
     modes = {
         "wait": rdcp_command.Reboot.FLAG_WAIT,
         "warm": rdcp_command.Reboot.FLAG_WARM,

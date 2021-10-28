@@ -1,10 +1,8 @@
 """Provides higher level functions for step-debugging functionality."""
 from __future__ import annotations
 
-import binascii
 import collections
 import logging
-import os
 import re
 import threading
 
@@ -649,12 +647,27 @@ class Debugger(_XBDMClient):
         self.refresh_thread_info()
 
     def debug_xbe(
-        self, path: str, command_line: Optional[str] = None, persist: bool = False
+        self,
+        path: str,
+        command_line: Optional[str] = None,
+        persist: bool = False,
+        wait_before_start: bool = False,
     ):
-        """Runs the given XBE and breaks at the entry address."""
+        """Runs the given XBE and breaks at the entry address.
 
-        dir_name = os.path.dirname(path)
-        xbe_name = os.path.basename(path)
+        If `wait_before_start` is set, a Go command must be sent before execution will
+        halt at the entry point.
+        """
+
+        flags = rdcp_command.Reboot.FLAG_WAIT | rdcp_command.Reboot.FLAG_WARM
+        if wait_before_start:
+            flags |= rdcp_command.Reboot.FLAG_STOP
+        self._restart_and_reconnect(flags)
+        self.clear_debug_xbe()
+
+        last_slash = path.rfind("\\")
+        xbe_name = path[last_slash + 1 :]
+        dir_name = path[: last_slash + 1]
 
         response = self._call(
             rdcp_command.LoadOnBootTitle(
@@ -668,7 +681,9 @@ class Debugger(_XBDMClient):
             print(response.pretty_message)
             return
 
-        self._restart_and_attach()
+        self._connection.send_command(rdcp_command.BreakAtStart())
+        if not wait_before_start:
+            self._connection.send_command(rdcp_command.Go())
 
     def clear_debug_xbe(self) -> bool:
         """Clears the previously persisted debug target XBE."""
@@ -852,14 +867,22 @@ class Debugger(_XBDMClient):
         response = self._call(rdcp_command.BreakOnWrite(address, length, clear=True))
         return response.ok
 
-    def _restart_and_attach(self):
-        response = self._call(
-            rdcp_command.Reboot(
-                rdcp_command.Reboot.FLAG_STOP
-                | rdcp_command.Reboot.FLAG_WAIT
-                | rdcp_command.Reboot.FLAG_WARM
-            )
-        )
+    def _restart_and_attach(
+        self,
+        reboot_flags: int = rdcp_command.Reboot.FLAG_STOP
+        | rdcp_command.Reboot.FLAG_WAIT
+        | rdcp_command.Reboot.FLAG_WARM,
+    ):
+        self._restart_and_reconnect(reboot_flags)
+        # Set a breakpoint at the entry to the program and continue forward
+        # until it is hit.
+        self._connection.send_command(rdcp_command.BreakAtStart())
+        self._connection.send_command(rdcp_command.Go())
+
+    def _restart_and_reconnect(
+        self, reboot_flags: int, wait_for_notification_channel: bool = True
+    ) -> bool:
+        response = self._call(rdcp_command.Reboot(reboot_flags))
         assert response.ok
 
         self._notification_channel_connected = False
@@ -874,19 +897,20 @@ class Debugger(_XBDMClient):
             max_wait_secs -= busy_wait_secs
             if max_wait_secs <= 0:
                 logger.error("XBOX does not appear to have rebooted, aborting.")
-                return
+                return False
 
         # Wait for XBDM to say "hello" on the debug channel
-        logger.debug("Waiting for XBOX to become available.")
-        max_wait_secs = 30
-        while not self._hello_received:
-            time.sleep(busy_wait_secs)
-            max_wait_secs -= busy_wait_secs
-            if max_wait_secs <= 0:
-                logger.error(
-                    "XBOX has not come back from reboot, attempting reconnect."
-                )
-                break
+        if wait_for_notification_channel:
+            logger.debug("Waiting for XBOX to become available.")
+            max_wait_secs = 30
+            while not self._hello_received:
+                time.sleep(busy_wait_secs)
+                max_wait_secs -= busy_wait_secs
+                if max_wait_secs <= 0:
+                    logger.error(
+                        "XBOX has not come back from reboot, attempting reconnect."
+                    )
+                    break
 
         # Attempt to reconnect the control channel.
         max_wait_secs = 10
@@ -898,15 +922,11 @@ class Debugger(_XBDMClient):
                 logger.error(
                     "Failed to reconnect debugger channel after restart, aborting."
                 )
-                return
+                return False
 
         self.refresh_thread_info()
         self._connection.send_command(rdcp_command.Debugger())
-
-        # Set a breakpoint at the entry to the program and continue forward
-        # until it is hit.
-        self._connection.send_command(rdcp_command.BreakAtStart())
-        self._connection.send_command(rdcp_command.Go())
+        return True
 
     def _build_notification_dispatch(self) -> Dict[str, Callable[[str], None]]:
         return {
