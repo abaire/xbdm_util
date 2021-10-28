@@ -93,6 +93,7 @@ class GDBTransport(ip_transport.IPTransport):
         handler = debugger.RedirectingNotificationHandler(
             on_execution_state_change=self._on_execution_state_change,
             on_breakpoint=self._on_breakpoint,
+            on_data_breakpoint=self._on_data_breakpoint,
         )
         self._debugger = debugger.Debugger(self._bridge, notification_handler=handler)
         self._debugger.attach()
@@ -692,6 +693,8 @@ class GDBTransport(ip_transport.IPTransport):
                 # Registers are provided via qXfer:features
                 continue
 
+        response.append("PacketSize=4096")
+
         # Disable acks.
         response.append("QStartNoAckMode+")
 
@@ -779,9 +782,14 @@ class GDBTransport(ip_transport.IPTransport):
         #  C - continue with signal
         #  s - step
         #  S - step with signal
-        self.send_packet(GDBPacket("vcont;c;C;s;S"))
+        self.send_packet(GDBPacket("vcont;c;s"))
 
     def _handle_vcont(self, args: str):
+        if not args:
+            logger.error("Unexpected empty vcont packet.")
+            self._send_error(1)
+            return
+
         if args == "c":
             logger.warning("TODO: Check that continue_all actually works.")
             self._debugger.continue_all()
@@ -789,8 +797,17 @@ class GDBTransport(ip_transport.IPTransport):
             self._send_ok()
             return
 
+        if args[0] == "s":
+            if ":" in args:
+                thread_id = args.split(":", 1)[1]
+                thread_id = int(thread_id, 16)
+                self._debugger.set_active_thread(thread_id)
+            self._debugger.step_instruction()
+            self._send_ok()
+            return
+
         logger.error("TODO: IMPLEMENT _handle_vcont")
-        self._send_error(1)
+        self._send_error(errno.EBADMSG)
 
     def _send_empty(self):
         self.send_packet(GDBPacket())
@@ -801,7 +818,7 @@ class GDBTransport(ip_transport.IPTransport):
     def _send_error(self, error_number: int):
         self.send_packet(GDBPacket("E%02X" % error_number))
 
-    def _send_thread_stop_packet(self, thread: debugger.Thread):
+    def _send_thread_stop_packet(self, thread: debugger.Thread) -> bool:
         halt_signal = thread.last_stop_reason_signal
         if not halt_signal:
             return False
@@ -810,6 +827,24 @@ class GDBTransport(ip_transport.IPTransport):
         # see https://sourceware.org/gdb/onlinedocs/gdb/Stop-Reply-Packets.html#Stop-Reply-Packets
         self.send_packet(GDBPacket("T%02xthread:%x;" % (halt_signal, thread.thread_id)))
 
+        return True
+
+    def _send_data_stop_packet(
+        self,
+        thread_id: int,
+        access: str,
+        address: int,
+    ) -> bool:
+        if access == "write":
+            access = "watch"
+        elif access == "read":
+            access = "rwatch"
+        else:
+            assert not "Execute watch not supported by GDB."
+
+        self.send_packet(
+            GDBPacket("T05thread:%x;%s:%08x;" % (thread_id, access, address))
+        )
         return True
 
     def _start_no_ack_mode(self):
@@ -829,7 +864,17 @@ class GDBTransport(ip_transport.IPTransport):
         print(f"EXECUTION STATE CHANGE: {new_state}")
 
     def _on_breakpoint(self, thread_id: int, address: int, reason: str):
-        print("BREAK: %d @ 0x%X %s" % (thread_id, address, reason))
+        self._send_thread_stop_packet(self._debugger.get_thread(thread_id))
+
+    def _on_data_breakpoint(
+        self,
+        thread_id: int,
+        access: str,
+        _access_address: int,
+        address: int,
+        _reason: str,
+    ):
+        self._send_data_stop_packet(thread_id, access, address)
 
 
 def _handle_build_command(

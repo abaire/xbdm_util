@@ -667,7 +667,15 @@ class Debugger(_XBDMClient):
 
         last_slash = path.rfind("\\")
         xbe_name = path[last_slash + 1 :]
+        # For convenience, treat any path to a non-xbe as a directory that contains a
+        # default.xbe target.
         dir_name = path[: last_slash + 1]
+        if not xbe_name.lower().endswith("xbe"):
+            dir_name += xbe_name
+            xbe_name = "default.xbe"
+
+        if not dir_name[-1] == "\\":
+            dir_name += "\\"
 
         response = self._call(
             rdcp_command.LoadOnBootTitle(
@@ -938,8 +946,8 @@ class Debugger(_XBDMClient):
             "terminate ": self._process_terminate_thread,
             "execution ": self._process_execution_state_change,
             "break ": self._process_break,
-            "data": self._process_data_break,
-            "singlestep": self._process_single_step_break,
+            "data ": self._process_data_break,
+            "singlestep ": self._process_single_step_break,
         }
 
     def _on_notification(self, message: str):
@@ -1069,7 +1077,7 @@ class Debugger(_XBDMClient):
         self._notification_handler.execution_state_change(message)
 
     _BREAK_RE = re.compile(
-        r"\s+".join([_match_hex(x) for x in ["addr", "thread"]]) + "\s+(.+)?"
+        r"\s+".join([_match_hex(x) for x in ["addr", "thread"]]) + "\s*(.+)?"
     )
 
     def _process_break(self, message: str):
@@ -1096,7 +1104,7 @@ class Debugger(_XBDMClient):
 
     _DATA_BREAK_RE = re.compile(
         r"\s+".join([_match_hex(x) for x in ["(read|write|execute)", "addr", "thread"]])
-        + "\s+(.+)?"
+        + "\s*(.+)?"
     )
 
     def _process_data_break(self, message: str):
@@ -1129,7 +1137,7 @@ class Debugger(_XBDMClient):
         )
 
     _SINGLE_STEP_RE = re.compile(
-        r"\s+".join([_match_hex(x) for x in ["addr", "thread"]]) + "\s+(.+)?"
+        r"\s+".join([_match_hex(x) for x in ["addr", "thread"]])
     )
 
     def _process_single_step_break(self, message: str):

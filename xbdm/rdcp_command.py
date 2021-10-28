@@ -24,7 +24,8 @@ class ProcessedResponseCatcher:
         self.response = args[0]
 
     def __getattr__(self, item):
-        assert self.response is not None
+        if not self.response:
+            raise SystemError()
         return getattr(self.response, item)
 
     @property
