@@ -1,3 +1,7 @@
+# NOTE
+
+The C++ version at https://github.com/abaire/xbdm_gdb_bridge supercedes this repo and may contain improvements not available here.
+
 # xbdm_util
 
 Provides utilities to interface with an XBOX running XBDM.
