@@ -302,6 +302,11 @@ def _magic_boot(args: [str]) -> Optional[rdcp_command.RDCPCommand]:
         elif arg[0] == "c":
             enable_cold = True
 
+    if not title.endswith(".xbe"):
+        if title[-1] != "\\":
+            title += "\\"
+        title += "default.xbe"
+
     return rdcp_command.MagicBoot(
         title, keep_debugger_resident, enable_cold, handler=print
     )

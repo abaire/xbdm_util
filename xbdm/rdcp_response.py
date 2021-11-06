@@ -37,7 +37,7 @@ def parse_data_map(data: bytes) -> {bytes, bytes}:
     buffer = bytearray()
     ESCAPED_SPACE = bytes([1])
     for i, section in enumerate(quoted_sections):
-        # Even sections are quoted
+        # Odd sections are quoted
         if (i & 0x01) == 1:
             section = section.replace(b" ", ESCAPED_SPACE)
         buffer.extend(section)
